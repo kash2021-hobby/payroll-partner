@@ -60,14 +60,22 @@ export interface BackendEmployee {
   email: string | null;
   dob: string | null;
   joining_date: string;
-  employment_type: 'hourly' | 'daily' | 'weekly';
+  employment_type: 'hourly' | 'daily' | 'weekly' | 'monthly';
   work_rate: number;
+  gross_monthly_salary?: number;
   position: string | null;
   department: string | null;
   shift: 'morning' | 'evening' | 'night' | 'custom' | null;
   phone: string | null;
   allowed_leaves: number;
   taken_leaves: number;
+  month_calculation_type?: 'calendar' | 'fixed_26';
+  is_pf_enabled?: boolean;
+  is_esi_enabled?: boolean;
+  is_tds_enabled?: boolean;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  ifsc_code?: string | null;
   status: 'active' | 'on-leave' | 'inactive';
   created_at: string;
 }
@@ -245,8 +253,13 @@ export const calculateMonthlySalary = (
   const totalHours = empAttendance.reduce((sum, a) => sum + (a.total_hours || 0), 0);
 
   let grossSalary = 0;
+  const totalDaysInMonth = employee.month_calculation_type === 'fixed_26' ? 26 : 30;
 
   switch (employee.employment_type) {
+    case 'monthly':
+      // Pro-rata: (Monthly Salary / Days in Month) × Days Present
+      grossSalary = (employee.work_rate / totalDaysInMonth) * presentDays;
+      break;
     case 'hourly':
       grossSalary = totalHours * employee.work_rate;
       break;
