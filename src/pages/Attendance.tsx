@@ -1,6 +1,11 @@
 import { useState, useRef } from 'react';
 import { useHRMS } from '@/contexts/HRMSContext';
-import { parseAttendanceCSV, getDaysInMonth } from '@/lib/payroll-engine';
+import { getDaysInMonth } from '@/lib/payroll-engine';
+import { 
+  processAttendanceCSV, 
+  generateSampleCSV,
+  AttendanceCSVResult 
+} from '@/lib/attendance-csv-parser';
 import {
   Table,
   TableBody,
@@ -20,9 +25,26 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, Save, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Upload, 
+  Save, 
+  FileSpreadsheet, 
+  AlertCircle, 
+  CheckCircle2, 
+  XCircle,
+  Download,
+  Eye,
+} from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -32,6 +54,7 @@ const months = [
 interface AttendanceEntry {
   employeeId: string;
   employeeName: string;
+  employeeCode: string;
   presentDays: number;
   totalDays: number;
   overtimeHours: number;
@@ -39,7 +62,7 @@ interface AttendanceEntry {
 }
 
 export default function Attendance() {
-  const { employees, attendanceRecords, bulkUpdateAttendance, addAttendanceRecord } = useHRMS();
+  const { employees, attendanceRecords, bulkUpdateAttendance } = useHRMS();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const currentDate = new Date();
@@ -47,6 +70,10 @@ export default function Attendance() {
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [attendanceData, setAttendanceData] = useState<AttendanceEntry[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  
+  // CSV Upload state
+  const [csvResult, setCsvResult] = useState<AttendanceCSVResult | null>(null);
+  const [showValidationDialog, setShowValidationDialog] = useState(false);
 
   const totalDays = getDaysInMonth(selectedYear, selectedMonth);
 
@@ -61,7 +88,8 @@ export default function Attendance() {
         return {
           employeeId: emp.id,
           employeeName: `${emp.firstName} ${emp.lastName}`,
-          presentDays: existing?.presentDays ?? totalDays,
+          employeeCode: emp.employeeId,
+          presentDays: existing?.presentDays ?? (emp.monthCalculationType === 'fixed_26' ? 26 : totalDays),
           totalDays: emp.monthCalculationType === 'fixed_26' ? 26 : totalDays,
           overtimeHours: existing?.overtimeHours ?? 0,
           oneTimeSalaryOverride: existing?.oneTimeSalaryOverride ?? 0,
@@ -69,9 +97,10 @@ export default function Attendance() {
       });
     setAttendanceData(data);
     setHasUnsavedChanges(false);
+    setCsvResult(null);
   };
 
-  // Load on first render and when selection changes
+  // Load on first render
   useState(() => {
     loadAttendance();
   });
@@ -101,39 +130,39 @@ export default function Attendance() {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const csvContent = e.target?.result as string;
-        const parsedData = parseAttendanceCSV(csvContent);
-        
-        // Match parsed data with employees
-        let matchedCount = 0;
+      const csvContent = e.target?.result as string;
+      
+      // Process CSV with full validation
+      const result = processAttendanceCSV(csvContent, employees, totalDays);
+      setCsvResult(result);
+      setShowValidationDialog(true);
+
+      if (result.success) {
+        // Apply valid records to attendance data
         setAttendanceData(prev =>
           prev.map(entry => {
-            const employee = employees.find(emp => emp.id === entry.employeeId);
-            const csvMatch = parsedData.find(
-              p => p.employeeId === employee?.employeeId
+            const csvMatch = result.validRecords.find(
+              r => r.employeeId === entry.employeeId
             );
             if (csvMatch) {
-              matchedCount++;
               return {
                 ...entry,
-                presentDays: Math.min(csvMatch.presentDays, entry.totalDays),
-                overtimeHours: csvMatch.overtimeHours,
+                presentDays: Math.min(csvMatch.daysPresent, entry.totalDays),
               };
             }
             return entry;
           })
         );
-
-        toast({
-          title: 'CSV Uploaded Successfully',
-          description: `Matched ${matchedCount} of ${parsedData.length} records from CSV.`,
-        });
         setHasUnsavedChanges(true);
-      } catch (error) {
+        
         toast({
-          title: 'CSV Parse Error',
-          description: error instanceof Error ? error.message : 'Failed to parse CSV file.',
+          title: 'CSV Processed Successfully',
+          description: `${result.summary.valid} records imported.`,
+        });
+      } else {
+        toast({
+          title: 'CSV Validation Failed',
+          description: `${result.summary.invalid} errors found. Review the validation report.`,
           variant: 'destructive',
         });
       }
@@ -146,6 +175,33 @@ export default function Attendance() {
     }
   };
 
+  const handleApplyValidRecords = () => {
+    if (!csvResult) return;
+
+    // Apply only valid records
+    setAttendanceData(prev =>
+      prev.map(entry => {
+        const csvMatch = csvResult.validRecords.find(
+          r => r.employeeId === entry.employeeId
+        );
+        if (csvMatch) {
+          return {
+            ...entry,
+            presentDays: Math.min(csvMatch.daysPresent, entry.totalDays),
+          };
+        }
+        return entry;
+      })
+    );
+    setHasUnsavedChanges(true);
+    setShowValidationDialog(false);
+    
+    toast({
+      title: 'Valid Records Applied',
+      description: `${csvResult.summary.valid} records have been applied. Invalid records were skipped.`,
+    });
+  };
+
   const handleSave = () => {
     const records = attendanceData.map(entry => ({
       employeeId: entry.employeeId,
@@ -154,26 +210,23 @@ export default function Attendance() {
     }));
 
     bulkUpdateAttendance(records, selectedMonth, selectedYear);
-    
-    // Also update one-time overrides
-    attendanceData.forEach(entry => {
-      if (entry.oneTimeSalaryOverride > 0) {
-        const existing = attendanceRecords.find(
-          a => a.employeeId === entry.employeeId && 
-               a.month === selectedMonth && 
-               a.year === selectedYear
-        );
-        if (existing) {
-          // Update would be needed here, for now we'll handle it in context
-        }
-      }
-    });
 
     toast({
       title: 'Attendance Saved',
       description: `Attendance for ${months[selectedMonth - 1]} ${selectedYear} has been saved.`,
     });
     setHasUnsavedChanges(false);
+  };
+
+  const handleDownloadSample = () => {
+    const csv = generateSampleCSV();
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'attendance_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const years = Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i);
@@ -193,6 +246,10 @@ export default function Attendance() {
             onChange={handleCSVUpload}
             className="hidden"
           />
+          <Button variant="outline" onClick={handleDownloadSample} className="gap-2">
+            <Download className="h-4 w-4" />
+            Download Template
+          </Button>
           <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2">
             <Upload className="h-4 w-4" />
             Upload CSV
@@ -254,11 +311,47 @@ export default function Attendance() {
       {/* CSV Format Guide */}
       <Alert>
         <FileSpreadsheet className="h-4 w-4" />
+        <AlertTitle>CSV Format</AlertTitle>
         <AlertDescription>
-          <strong>CSV Format:</strong> Upload a CSV with columns: <code>Employee ID</code>, <code>Present Days</code>, and optionally <code>Overtime Hours</code>. 
-          The Employee ID should match the system's Employee ID (e.g., EMP001).
+          Required columns: <code className="bg-muted px-1 rounded">Employee_Code</code>, <code className="bg-muted px-1 rounded">Days_Present</code>
+          <br />
+          <span className="text-muted-foreground text-sm">
+            The Employee_Code must match the system's Employee ID (e.g., EMP001, EMP002).
+          </span>
         </AlertDescription>
       </Alert>
+
+      {/* CSV Validation Result Alert */}
+      {csvResult && (
+        <Alert variant={csvResult.success ? 'default' : 'destructive'}>
+          {csvResult.success ? (
+            <CheckCircle2 className="h-4 w-4" />
+          ) : (
+            <AlertCircle className="h-4 w-4" />
+          )}
+          <AlertTitle>
+            CSV Validation {csvResult.success ? 'Successful' : 'Failed'}
+          </AlertTitle>
+          <AlertDescription>
+            <div className="flex items-center gap-4 mt-2">
+              <Badge variant="outline">Processed: {csvResult.summary.processed}</Badge>
+              <Badge variant="default" className="bg-success">Valid: {csvResult.summary.valid}</Badge>
+              {csvResult.summary.invalid > 0 && (
+                <Badge variant="destructive">Invalid: {csvResult.summary.invalid}</Badge>
+              )}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowValidationDialog(true)}
+                className="gap-1 ml-auto"
+              >
+                <Eye className="h-3 w-3" />
+                View Details
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {hasUnsavedChanges && (
         <Alert className="border-warning">
@@ -282,9 +375,10 @@ export default function Attendance() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[250px]">Employee</TableHead>
+                  <TableHead className="w-[100px]">Code</TableHead>
+                  <TableHead className="w-[200px]">Employee</TableHead>
                   <TableHead className="w-[120px]">Present Days</TableHead>
-                  <TableHead className="w-[120px]">Total Days</TableHead>
+                  <TableHead className="w-[100px]">Total Days</TableHead>
                   <TableHead className="w-[140px]">Overtime (hrs)</TableHead>
                   <TableHead className="w-[160px]">One-time Bonus (₹)</TableHead>
                 </TableRow>
@@ -292,13 +386,16 @@ export default function Attendance() {
               <TableBody>
                 {attendanceData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No active employees found. Add employees first.
                     </TableCell>
                   </TableRow>
                 ) : (
                   attendanceData.map((entry) => (
                     <TableRow key={entry.employeeId}>
+                      <TableCell className="font-mono text-sm">
+                        {entry.employeeCode}
+                      </TableCell>
                       <TableCell>
                         <p className="font-medium">{entry.employeeName}</p>
                       </TableCell>
@@ -356,6 +453,129 @@ export default function Attendance() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Validation Details Dialog */}
+      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>CSV Validation Report</DialogTitle>
+            <DialogDescription>
+              Detailed results of the attendance CSV validation
+            </DialogDescription>
+          </DialogHeader>
+
+          {csvResult && (
+            <div className="space-y-6">
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-4 rounded-lg bg-muted/50 text-center">
+                  <p className="text-2xl font-bold">{csvResult.summary.processed}</p>
+                  <p className="text-sm text-muted-foreground">Total Rows</p>
+                </div>
+                <div className="p-4 rounded-lg bg-success/10 text-center">
+                  <p className="text-2xl font-bold text-success">{csvResult.summary.valid}</p>
+                  <p className="text-sm text-muted-foreground">Valid</p>
+                </div>
+                <div className="p-4 rounded-lg bg-destructive/10 text-center">
+                  <p className="text-2xl font-bold text-destructive">{csvResult.summary.invalid}</p>
+                  <p className="text-sm text-muted-foreground">Invalid</p>
+                </div>
+              </div>
+
+              {/* Errors */}
+              {csvResult.errors.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-destructive flex items-center gap-2">
+                    <XCircle className="h-4 w-4" />
+                    Errors ({csvResult.errors.length})
+                  </h4>
+                  <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 space-y-2 max-h-[200px] overflow-y-auto">
+                    {csvResult.errors.map((error, index) => (
+                      <p key={index} className="text-sm font-mono">
+                        {error}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Valid Records */}
+              {csvResult.validRecords.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-success flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Valid Records ({csvResult.validRecords.length})
+                  </h4>
+                  <div className="rounded-lg border p-4 max-h-[200px] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Row</TableHead>
+                          <TableHead>Employee Code</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Days Present</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {csvResult.validRecords.map((record, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{record.rowNumber}</TableCell>
+                            <TableCell className="font-mono">{record.employeeCode}</TableCell>
+                            <TableCell>{record.employeeName}</TableCell>
+                            <TableCell>{record.daysPresent}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Invalid Records */}
+              {csvResult.invalidRecords.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-destructive flex items-center gap-2">
+                    <XCircle className="h-4 w-4" />
+                    Invalid Records ({csvResult.invalidRecords.length})
+                  </h4>
+                  <div className="rounded-lg border border-destructive/20 p-4 max-h-[200px] overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Row</TableHead>
+                          <TableHead>Employee Code</TableHead>
+                          <TableHead>Error</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {csvResult.invalidRecords.map((record, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{record.rowNumber}</TableCell>
+                            <TableCell className="font-mono">{record.employeeCode}</TableCell>
+                            <TableCell className="text-destructive text-sm">{record.error}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button variant="outline" onClick={() => setShowValidationDialog(false)}>
+                  Close
+                </Button>
+                {csvResult.validRecords.length > 0 && !csvResult.success && (
+                  <Button onClick={handleApplyValidRecords}>
+                    Apply {csvResult.validRecords.length} Valid Records Only
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
