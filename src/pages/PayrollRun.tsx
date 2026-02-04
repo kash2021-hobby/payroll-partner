@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useHRMS } from '@/contexts/HRMSContext';
-import { formatCurrency } from '@/lib/payroll-engine';
+import { formatCurrency, getDaysInMonth } from '@/lib/payroll-engine';
+import { calculateCoreSalary } from '@/lib/salary-calculator';
 import {
   Table,
   TableBody,
@@ -21,13 +22,6 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { 
   Play, 
   Lock, 
@@ -37,6 +31,7 @@ import {
   DollarSign,
   Minus,
   Plus,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -46,13 +41,35 @@ const months = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+interface PayrollGridRow {
+  id: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  presentDays: number;
+  totalDays: number;
+  // Calculated values
+  gross: number;
+  basic: number;
+  pfAmount: number;
+  esiAmount: number;
+  tdsWarning: boolean;
+  // Editable values
+  manualTDS: number;
+  arrearsAdjustment: number;
+  // Computed net
+  netPayable: number;
+  // Status
+  isLocked: boolean;
+}
+
 export default function PayrollRun() {
   const { 
     employees, 
-    payrollRecords, 
-    generatePayroll, 
-    lockPayroll, 
-    updatePayrollAdjustment,
+    attendanceRecords,
+    payrollRecords,
+    generatePayroll,
+    lockPayroll,
     hasPermission,
     currentUser,
   } = useHRMS();
@@ -60,37 +77,173 @@ export default function PayrollRun() {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
-  const [adjustmentDialogOpen, setAdjustmentDialogOpen] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<string | null>(null);
-  const [adjustmentValue, setAdjustmentValue] = useState(0);
+  const [payrollGrid, setPayrollGrid] = useState<PayrollGridRow[]>([]);
+  const [isGenerated, setIsGenerated] = useState(false);
 
-  const currentPayroll = useMemo(() => {
-    return payrollRecords.filter(
-      p => p.month === selectedMonth && p.year === selectedYear
-    );
-  }, [payrollRecords, selectedMonth, selectedYear]);
+  const totalDays = getDaysInMonth(selectedYear, selectedMonth);
 
-  const totals = useMemo(() => {
-    return currentPayroll.reduce(
-      (acc, p) => ({
-        grossSalary: acc.grossSalary + p.grossSalary,
-        totalEarnings: acc.totalEarnings + p.totalEarnings,
-        totalDeductions: acc.totalDeductions + p.totalDeductions,
-        netPayable: acc.netPayable + p.netPayable,
-      }),
-      { grossSalary: 0, totalEarnings: 0, totalDeductions: 0, netPayable: 0 }
-    );
-  }, [currentPayroll]);
+  /**
+   * Calculate Net Payable using the formula:
+   * Net = Gross + Arrears - PF - ESI - Manual_TDS
+   */
+  const calculateNetPayable = useCallback((
+    gross: number,
+    arrearsAdjustment: number,
+    pfAmount: number,
+    esiAmount: number,
+    manualTDS: number
+  ): number => {
+    return Math.round(gross + arrearsAdjustment - pfAmount - esiAmount - manualTDS);
+  }, []);
 
-  const handleGeneratePayroll = () => {
+  /**
+   * Generate/Fetch payroll data and populate the grid
+   */
+  const handleGeneratePayroll = useCallback(() => {
+    const gridData: PayrollGridRow[] = employees
+      .filter(emp => emp.isActive)
+      .map(emp => {
+        // Get attendance for this employee
+        const attendance = attendanceRecords.find(
+          a => a.employeeId === emp.id && a.month === selectedMonth && a.year === selectedYear
+        );
+        
+        const employeeTotalDays = emp.monthCalculationType === 'fixed_26' ? 26 : totalDays;
+        const presentDays = attendance?.presentDays ?? employeeTotalDays;
+
+        // Calculate salary using core calculator
+        const calculation = calculateCoreSalary(
+          emp.grossMonthlySalary,
+          employeeTotalDays,
+          presentDays,
+          emp.isPFEnabled,
+          emp.isESIEnabled
+        );
+
+        // Check if there's existing payroll data
+        const existingPayroll = payrollRecords.find(
+          p => p.employeeId === emp.id && p.month === selectedMonth && p.year === selectedYear
+        );
+
+        const manualTDS = existingPayroll?.tdsDeduction ?? 0;
+        const arrearsAdjustment = existingPayroll?.previousMonthAdjustment ?? 0;
+
+        // Calculate net payable
+        const netPayable = calculateNetPayable(
+          calculation.Gross,
+          arrearsAdjustment,
+          calculation.PF_Amount,
+          calculation.ESI_Amount,
+          manualTDS
+        );
+
+        return {
+          id: existingPayroll?.id ?? crypto.randomUUID(),
+          employeeId: emp.id,
+          employeeCode: emp.employeeId,
+          employeeName: `${emp.firstName} ${emp.lastName}`,
+          presentDays,
+          totalDays: employeeTotalDays,
+          gross: calculation.Gross,
+          basic: calculation.Basic,
+          pfAmount: calculation.PF_Amount,
+          esiAmount: calculation.ESI_Amount,
+          tdsWarning: calculation.TDS_Warning,
+          manualTDS,
+          arrearsAdjustment,
+          netPayable,
+          isLocked: existingPayroll?.isLocked ?? false,
+        };
+      });
+
+    setPayrollGrid(gridData);
+    setIsGenerated(true);
+    
+    // Also trigger the context's generate payroll
     generatePayroll(selectedMonth, selectedYear);
+
     toast({
       title: 'Payroll Generated',
       description: `Payroll for ${months[selectedMonth - 1]} ${selectedYear} has been calculated.`,
     });
-  };
+  }, [employees, attendanceRecords, payrollRecords, selectedMonth, selectedYear, totalDays, calculateNetPayable, generatePayroll]);
 
-  const handleLockRecord = (id: string) => {
+  /**
+   * Handle Manual TDS change with instant recalculation
+   */
+  const handleManualTDSChange = useCallback((rowId: string, value: number) => {
+    setPayrollGrid(prev => prev.map(row => {
+      if (row.id === rowId && !row.isLocked) {
+        const newNetPayable = calculateNetPayable(
+          row.gross,
+          row.arrearsAdjustment,
+          row.pfAmount,
+          row.esiAmount,
+          value
+        );
+        return {
+          ...row,
+          manualTDS: value,
+          netPayable: newNetPayable,
+        };
+      }
+      return row;
+    }));
+  }, [calculateNetPayable]);
+
+  /**
+   * Handle Arrears Adjustment change with instant recalculation
+   */
+  const handleArrearsChange = useCallback((rowId: string, value: number) => {
+    setPayrollGrid(prev => prev.map(row => {
+      if (row.id === rowId && !row.isLocked) {
+        const newNetPayable = calculateNetPayable(
+          row.gross,
+          value,
+          row.pfAmount,
+          row.esiAmount,
+          row.manualTDS
+        );
+        return {
+          ...row,
+          arrearsAdjustment: value,
+          netPayable: newNetPayable,
+        };
+      }
+      return row;
+    }));
+  }, [calculateNetPayable]);
+
+  /**
+   * Recalculate all rows
+   */
+  const handleRecalculateAll = useCallback(() => {
+    setPayrollGrid(prev => prev.map(row => {
+      if (row.isLocked) return row;
+      
+      const newNetPayable = calculateNetPayable(
+        row.gross,
+        row.arrearsAdjustment,
+        row.pfAmount,
+        row.esiAmount,
+        row.manualTDS
+      );
+      return {
+        ...row,
+        netPayable: newNetPayable,
+      };
+    }));
+
+    toast({
+      title: 'Recalculated',
+      description: 'All payroll values have been recalculated.',
+    });
+  }, [calculateNetPayable]);
+
+  /**
+   * Lock a single record
+   */
+  const handleLockRecord = useCallback((rowId: string) => {
     if (!hasPermission('lock')) {
       toast({
         title: 'Permission Denied',
@@ -99,14 +252,30 @@ export default function PayrollRun() {
       });
       return;
     }
-    lockPayroll(id);
+
+    setPayrollGrid(prev => prev.map(row => {
+      if (row.id === rowId) {
+        return { ...row, isLocked: true };
+      }
+      return row;
+    }));
+
+    // Also lock in context
+    const row = payrollGrid.find(r => r.id === rowId);
+    if (row) {
+      lockPayroll(rowId);
+    }
+
     toast({
-      title: 'Payroll Locked',
+      title: 'Record Locked',
       description: 'This payroll record is now read-only.',
     });
-  };
+  }, [hasPermission, payrollGrid, lockPayroll]);
 
-  const handleLockAll = () => {
+  /**
+   * Lock all records
+   */
+  const handleLockAll = useCallback(() => {
     if (!hasPermission('lock')) {
       toast({
         title: 'Permission Denied',
@@ -115,46 +284,40 @@ export default function PayrollRun() {
       });
       return;
     }
-    
-    currentPayroll.forEach(record => {
-      if (!record.isLocked) {
-        lockPayroll(record.id);
-      }
-    });
-    
+
+    setPayrollGrid(prev => prev.map(row => ({ ...row, isLocked: true })));
+
     toast({
-      title: 'All Payroll Locked',
-      description: `All payroll records for ${months[selectedMonth - 1]} ${selectedYear} have been locked.`,
+      title: 'All Records Locked',
+      description: `Payroll for ${months[selectedMonth - 1]} ${selectedYear} has been locked.`,
     });
-  };
+  }, [hasPermission, selectedMonth, selectedYear]);
 
-  const openAdjustmentDialog = (recordId: string, currentAdjustment: number) => {
-    setSelectedRecord(recordId);
-    setAdjustmentValue(currentAdjustment);
-    setAdjustmentDialogOpen(true);
-  };
-
-  const handleSaveAdjustment = () => {
-    if (selectedRecord) {
-      updatePayrollAdjustment(selectedRecord, adjustmentValue);
-      toast({
-        title: 'Adjustment Updated',
-        description: 'Previous month adjustment has been applied.',
-      });
-    }
-    setAdjustmentDialogOpen(false);
-    setSelectedRecord(null);
-  };
+  // Calculate totals
+  const totals = useMemo(() => {
+    return payrollGrid.reduce(
+      (acc, row) => ({
+        gross: acc.gross + row.gross,
+        pfAmount: acc.pfAmount + row.pfAmount,
+        esiAmount: acc.esiAmount + row.esiAmount,
+        manualTDS: acc.manualTDS + row.manualTDS,
+        arrearsAdjustment: acc.arrearsAdjustment + row.arrearsAdjustment,
+        netPayable: acc.netPayable + row.netPayable,
+      }),
+      { gross: 0, pfAmount: 0, esiAmount: 0, manualTDS: 0, arrearsAdjustment: 0, netPayable: 0 }
+    );
+  }, [payrollGrid]);
 
   const years = Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i);
-  const allLocked = currentPayroll.length > 0 && currentPayroll.every(p => p.isLocked);
+  const allLocked = payrollGrid.length > 0 && payrollGrid.every(r => r.isLocked);
+  const hasUnlockedRows = payrollGrid.some(r => !r.isLocked);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Payroll Run</h1>
-          <p className="text-muted-foreground">Generate and review monthly payroll calculations</p>
+          <p className="text-muted-foreground">Generate, adjust, and finalize monthly payroll</p>
         </div>
         <div className="flex gap-3">
           <Button 
@@ -163,27 +326,43 @@ export default function PayrollRun() {
             className="gap-2"
           >
             <Calculator className="h-4 w-4" />
-            {currentPayroll.length > 0 ? 'Recalculate' : 'Generate'} Payroll
+            {isGenerated ? 'Regenerate' : 'Generate'} Payroll
           </Button>
-          {currentPayroll.length > 0 && !allLocked && hasPermission('lock') && (
-            <Button onClick={handleLockAll} variant="default" className="gap-2">
-              <Lock className="h-4 w-4" />
-              Confirm & Lock All
-            </Button>
+          {isGenerated && hasUnlockedRows && (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={handleRecalculateAll}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Recalculate All
+              </Button>
+              {hasPermission('lock') && (
+                <Button onClick={handleLockAll} className="gap-2">
+                  <Lock className="h-4 w-4" />
+                  Lock All
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* Month/Year Selection */}
+      {/* Period Selection */}
       <Card>
         <CardHeader>
-          <CardTitle>Select Payroll Period</CardTitle>
+          <CardTitle>Payroll Period</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
             <div className="space-y-2">
               <Label>Month</Label>
-              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+              <Select value={String(selectedMonth)} onValueChange={(v) => {
+                setSelectedMonth(Number(v));
+                setIsGenerated(false);
+                setPayrollGrid([]);
+              }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -198,7 +377,11 @@ export default function PayrollRun() {
             </div>
             <div className="space-y-2">
               <Label>Year</Label>
-              <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+              <Select value={String(selectedYear)} onValueChange={(v) => {
+                setSelectedYear(Number(v));
+                setIsGenerated(false);
+                setPayrollGrid([]);
+              }}>
                 <SelectTrigger className="w-[120px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -215,177 +398,230 @@ export default function PayrollRun() {
         </CardContent>
       </Card>
 
+      {/* Formula Reference */}
+      <Card className="bg-muted/30">
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium">Formula:</span>
+            <code className="bg-background px-2 py-1 rounded text-xs">
+              Net Payable = Gross + Arrears - PF - ESI - Manual_TDS
+            </code>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Summary Stats */}
-      {currentPayroll.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {isGenerated && payrollGrid.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Gross</p>
-                  <p className="text-xl font-bold">{formatCurrency(totals.grossSalary)}</p>
-                </div>
-                <DollarSign className="h-8 w-8 text-muted-foreground/30" />
-              </div>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-muted-foreground">Gross Total</p>
+              <p className="text-lg font-bold">{formatCurrency(totals.gross)}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Earnings</p>
-                  <p className="text-xl font-bold">{formatCurrency(totals.totalEarnings)}</p>
-                </div>
-                <Plus className="h-8 w-8 text-success/30" />
-              </div>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-muted-foreground">PF Total</p>
+              <p className="text-lg font-bold text-destructive">-{formatCurrency(totals.pfAmount)}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Deductions</p>
-                  <p className="text-xl font-bold">{formatCurrency(totals.totalDeductions)}</p>
-                </div>
-                <Minus className="h-8 w-8 text-destructive/30" />
-              </div>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-muted-foreground">ESI Total</p>
+              <p className="text-lg font-bold text-destructive">-{formatCurrency(totals.esiAmount)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-muted-foreground">TDS Total</p>
+              <p className="text-lg font-bold text-destructive">-{formatCurrency(totals.manualTDS)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-muted-foreground">Arrears Total</p>
+              <p className={cn("text-lg font-bold", totals.arrearsAdjustment >= 0 ? "text-success" : "text-destructive")}>
+                {totals.arrearsAdjustment >= 0 ? '+' : ''}{formatCurrency(totals.arrearsAdjustment)}
+              </p>
             </CardContent>
           </Card>
           <Card className="bg-primary text-primary-foreground">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-primary-foreground/80">Net Payable</p>
-                  <p className="text-xl font-bold">{formatCurrency(totals.netPayable)}</p>
-                </div>
-                <CheckCircle2 className="h-8 w-8 text-primary-foreground/30" />
-              </div>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-primary-foreground/80">Net Payable</p>
+              <p className="text-lg font-bold">{formatCurrency(totals.netPayable)}</p>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {/* Payroll Table */}
+      {/* Payroll Grid */}
       <Card>
         <CardHeader>
-          <CardTitle>Payroll Summary</CardTitle>
+          <CardTitle>Payroll Grid</CardTitle>
           <CardDescription>
-            {months[selectedMonth - 1]} {selectedYear} • {currentPayroll.length} employees
+            {isGenerated 
+              ? `${months[selectedMonth - 1]} ${selectedYear} • ${payrollGrid.length} employees`
+              : 'Click "Generate Payroll" to load data'
+            }
             {allLocked && (
               <Badge className="ml-2" variant="secondary">
                 <Lock className="h-3 w-3 mr-1" />
-                Locked
+                All Locked
               </Badge>
             )}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {currentPayroll.length === 0 ? (
+          {!isGenerated ? (
             <div className="text-center py-12">
               <Calculator className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
               <p className="text-muted-foreground mb-4">
-                No payroll data for {months[selectedMonth - 1]} {selectedYear}
+                Select a period and generate payroll to view data
               </p>
               <Button onClick={handleGeneratePayroll} className="gap-2">
                 <Play className="h-4 w-4" />
                 Generate Payroll
               </Button>
             </div>
+          ) : payrollGrid.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              No active employees found
+            </div>
           ) : (
             <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="sticky left-0 bg-card">Employee</TableHead>
-                    <TableHead className="text-center">Present</TableHead>
-                    <TableHead className="text-right">Gross</TableHead>
-                    <TableHead className="text-right">Pro-Rata</TableHead>
-                    <TableHead className="text-right">Adjustments</TableHead>
-                    <TableHead className="text-right">PF</TableHead>
-                    <TableHead className="text-right">ESI</TableHead>
-                    <TableHead className="text-right">TDS</TableHead>
-                    <TableHead className="text-right">Net Payable</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="sticky left-0 bg-muted/50">Employee</TableHead>
+                    <TableHead className="text-center w-[80px]">Days</TableHead>
+                    <TableHead className="text-right w-[110px]">Gross</TableHead>
+                    <TableHead className="text-right w-[100px]">PF</TableHead>
+                    <TableHead className="text-right w-[100px]">ESI</TableHead>
+                    <TableHead className="text-center w-[130px]">Manual TDS (₹)</TableHead>
+                    <TableHead className="text-center w-[150px]">Arrears (+/-) ₹</TableHead>
+                    <TableHead className="text-right w-[120px]">Net Payable</TableHead>
+                    <TableHead className="text-center w-[100px]">Status</TableHead>
+                    <TableHead className="text-right w-[80px]">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {currentPayroll.map((record) => (
+                  {payrollGrid.map((row) => (
                     <TableRow 
-                      key={record.id}
+                      key={row.id}
                       className={cn(
-                        record.isTDSFlagged && 'bg-warning/5'
+                        row.tdsWarning && 'bg-warning/5',
+                        row.isLocked && 'opacity-75'
                       )}
                     >
                       <TableCell className="sticky left-0 bg-card">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{record.employeeName}</span>
-                          {record.isTDSFlagged && (
-                            <AlertTriangle className="h-4 w-4 text-warning" />
+                          <div>
+                            <p className="font-medium">{row.employeeName}</p>
+                            <p className="text-xs text-muted-foreground">{row.employeeCode}</p>
+                          </div>
+                          {row.tdsWarning && (
+                            <span title="TDS Warning: Gross > ₹50,000">
+                              <AlertTriangle className="h-4 w-4 text-warning" />
+                            </span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        {record.presentDays}/{record.totalDays}
+                        {row.presentDays}/{row.totalDays}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {formatCurrency(record.grossSalary)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatCurrency(record.proRataSalary)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        <button
-                          onClick={() => openAdjustmentDialog(record.id, record.previousMonthAdjustment)}
-                          disabled={record.isLocked}
-                          className={cn(
-                            "hover:underline",
-                            record.previousMonthAdjustment > 0 && "text-success",
-                            record.previousMonthAdjustment < 0 && "text-destructive",
-                            record.isLocked && "cursor-not-allowed opacity-50"
-                          )}
-                        >
-                          {record.previousMonthAdjustment >= 0 ? '+' : ''}
-                          {formatCurrency(record.previousMonthAdjustment)}
-                        </button>
+                        {formatCurrency(row.gross)}
                       </TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">
-                        -{formatCurrency(record.pfDeduction)}
+                        -{formatCurrency(row.pfAmount)}
                       </TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">
-                        -{formatCurrency(record.esiDeduction)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        -{formatCurrency(record.tdsDeduction)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-semibold">
-                        {formatCurrency(record.netPayable)}
+                        -{formatCurrency(row.esiAmount)}
                       </TableCell>
                       <TableCell className="text-center">
-                        {record.isLocked ? (
+                        <Input
+                          type="number"
+                          min={0}
+                          value={row.manualTDS}
+                          onChange={(e) => handleManualTDSChange(row.id, Number(e.target.value) || 0)}
+                          disabled={row.isLocked}
+                          className="w-24 text-center mx-auto"
+                          placeholder="0"
+                        />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Input
+                          type="number"
+                          value={row.arrearsAdjustment}
+                          onChange={(e) => handleArrearsChange(row.id, Number(e.target.value) || 0)}
+                          disabled={row.isLocked}
+                          className="w-28 text-center mx-auto"
+                          placeholder="0"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold">
+                        <span className={cn(
+                          row.netPayable < 0 && 'text-destructive'
+                        )}>
+                          {formatCurrency(row.netPayable)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {row.isLocked ? (
                           <Badge variant="secondary" className="gap-1">
                             <Lock className="h-3 w-3" />
                             Locked
                           </Badge>
                         ) : (
-                          <Badge variant="outline">Pending</Badge>
+                          <Badge variant="outline" className="gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Ready
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {!record.isLocked && hasPermission('lock') && (
+                        {!row.isLocked && hasPermission('lock') && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleLockRecord(record.id)}
-                            className="gap-1"
+                            onClick={() => handleLockRecord(row.id)}
                           >
                             <Lock className="h-3 w-3" />
-                            Lock
                           </Button>
                         )}
                       </TableCell>
                     </TableRow>
                   ))}
+                  {/* Totals Row */}
+                  <TableRow className="bg-muted/50 font-semibold">
+                    <TableCell className="sticky left-0 bg-muted/50">
+                      <span className="font-bold">TOTALS</span>
+                    </TableCell>
+                    <TableCell className="text-center">-</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {formatCurrency(totals.gross)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-destructive">
+                      -{formatCurrency(totals.pfAmount)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-destructive">
+                      -{formatCurrency(totals.esiAmount)}
+                    </TableCell>
+                    <TableCell className="text-center font-mono text-destructive">
+                      -{formatCurrency(totals.manualTDS)}
+                    </TableCell>
+                    <TableCell className={cn(
+                      "text-center font-mono",
+                      totals.arrearsAdjustment >= 0 ? "text-success" : "text-destructive"
+                    )}>
+                      {totals.arrearsAdjustment >= 0 ? '+' : ''}{formatCurrency(totals.arrearsAdjustment)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-lg">
+                      {formatCurrency(totals.netPayable)}
+                    </TableCell>
+                    <TableCell></TableCell>
+                    <TableCell></TableCell>
+                  </TableRow>
                 </TableBody>
               </Table>
             </div>
@@ -393,41 +629,42 @@ export default function PayrollRun() {
         </CardContent>
       </Card>
 
-      {/* Adjustment Dialog */}
-      <Dialog open={adjustmentDialogOpen} onOpenChange={setAdjustmentDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Previous Month Adjustment</DialogTitle>
-            <DialogDescription>
-              Enter a positive value for arrears/bonus or negative for deductions.
-              This will be added to the final net payable.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="adjustment">Adjustment Amount (₹)</Label>
-              <Input
-                id="adjustment"
-                type="number"
-                value={adjustmentValue}
-                onChange={(e) => setAdjustmentValue(Number(e.target.value))}
-                placeholder="Enter amount (+/-)"
-              />
-              <p className="text-sm text-muted-foreground">
-                Positive: +5000 (arrears, bonus) | Negative: -2000 (deductions)
-              </p>
+      {/* Calculation Details Card */}
+      {isGenerated && payrollGrid.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Calculation Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              <div className="p-3 rounded-lg bg-muted/50">
+                <strong>Gross (Pro-Rata):</strong>
+                <p className="text-xs text-muted-foreground mt-1">
+                  (Monthly Salary ÷ Days in Month) × Present Days
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50">
+                <strong>PF Deduction:</strong>
+                <p className="text-xs text-muted-foreground mt-1">
+                  12% of Basic (if enabled & Basic ≤ ₹15,000)
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50">
+                <strong>ESI Deduction:</strong>
+                <p className="text-xs text-muted-foreground mt-1">
+                  0.75% of Gross (if enabled & Gross ≤ ₹21,000)
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50">
+                <strong>TDS Warning:</strong>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Flagged if Gross &gt; ₹50,000
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setAdjustmentDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveAdjustment}>
-              Save Adjustment
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
