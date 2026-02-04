@@ -89,6 +89,8 @@ export default function PayrollRun() {
     generatePayroll,
     lockPayroll,
     hasPermission,
+    checkUserPermission,
+    addAuditLog,
   } = useHRMS();
   
   const currentDate = new Date();
@@ -199,14 +201,39 @@ export default function PayrollRun() {
 
   /**
    * Handle Manual TDS change with instant recalculation
+   * Creates audit log entry for salary modification
    */
   const handleManualTDSChange = useCallback((rowId: string, value: number) => {
     if (isMonthLocked) return;
     
+    // RBAC check for payroll adjustment
+    const permission = checkUserPermission('payroll:adjust');
+    if (!permission.allowed) {
+      toast({
+        title: 'Permission Denied',
+        description: permission.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     setPayrollGrid(prev => prev.map(row => {
       if (row.id === rowId && !row.isLocked) {
+        const oldTDS = row.manualTDS;
         const totalDeductions = row.pfAmount + row.esiAmount + value;
         const netPayable = row.totalEarnings - totalDeductions;
+        
+        // Create audit log for TDS modification
+        if (oldTDS !== value) {
+          addAuditLog(
+            'Modified Manual TDS',
+            'payroll',
+            row.employeeCode,
+            `TDS: ₹${oldTDS}, Net: ₹${row.netPayable}`,
+            `TDS: ₹${value}, Net: ₹${netPayable}`
+          );
+        }
+        
         return {
           ...row,
           manualTDS: value,
@@ -216,18 +243,43 @@ export default function PayrollRun() {
       }
       return row;
     }));
-  }, [isMonthLocked]);
+  }, [isMonthLocked, checkUserPermission, addAuditLog]);
 
   /**
    * Handle Arrears Adjustment change with instant recalculation
+   * Creates audit log entry for salary modification
    */
   const handleArrearsChange = useCallback((rowId: string, value: number) => {
     if (isMonthLocked) return;
     
+    // RBAC check for payroll adjustment
+    const permission = checkUserPermission('payroll:adjust');
+    if (!permission.allowed) {
+      toast({
+        title: 'Permission Denied',
+        description: permission.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     setPayrollGrid(prev => prev.map(row => {
       if (row.id === rowId && !row.isLocked) {
+        const oldArrears = row.arrearsAdjustment;
         const totalEarnings = row.gross + value;
         const netPayable = totalEarnings - row.totalDeductions;
+        
+        // Create audit log for Arrears modification
+        if (oldArrears !== value) {
+          addAuditLog(
+            'Modified Arrears Adjustment',
+            'payroll',
+            row.employeeCode,
+            `Arrears: ₹${oldArrears}, Net: ₹${row.netPayable}`,
+            `Arrears: ₹${value}, Net: ₹${netPayable}`
+          );
+        }
+        
         return {
           ...row,
           arrearsAdjustment: value,
@@ -237,7 +289,7 @@ export default function PayrollRun() {
       }
       return row;
     }));
-  }, [isMonthLocked]);
+  }, [isMonthLocked, checkUserPermission, addAuditLog]);
 
   /**
    * Recalculate all rows

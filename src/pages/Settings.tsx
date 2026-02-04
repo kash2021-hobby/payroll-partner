@@ -14,23 +14,26 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { UserRole } from '@/types/hrms';
-import { Shield, Percent, Save, User } from 'lucide-react';
+import { getRoleDisplayName, getRoleBadgeVariant } from '@/lib/rbac';
+import { Shield, Percent, Save, User, Lock, Unlock } from 'lucide-react';
 
 export default function Settings() {
-  const { globalSettings, updateSettings, currentUser, setCurrentUser, hasPermission } = useHRMS();
+  const { globalSettings, updateSettings, currentUser, setCurrentUser, hasPermission, checkUserPermission } = useHRMS();
   
   const [pfPercentage, setPfPercentage] = useState(globalSettings.pfPercentage);
   const [esiPercentage, setEsiPercentage] = useState(globalSettings.esiPercentage);
   const [tdsThreshold, setTdsThreshold] = useState(globalSettings.tdsThreshold);
   const [tdsPercentage, setTdsPercentage] = useState(globalSettings.tdsPercentage);
 
-  const canEditSettings = hasPermission('settings');
+  // Use new RBAC permission check
+  const settingsPermission = checkUserPermission('settings:edit');
+  const canEditSettings = settingsPermission.allowed;
 
   const handleSave = () => {
     if (!canEditSettings) {
       toast({
         title: 'Permission Denied',
-        description: 'Only Super Admin can modify global settings.',
+        description: settingsPermission.message,
         variant: 'destructive',
       });
       return;
@@ -103,17 +106,25 @@ export default function Settings() {
               </Select>
             </div>
             <div className="pt-6">
-              <Badge variant={currentUser.role === 'super_admin' ? 'default' : 'secondary'}>
+              <Badge variant={getRoleBadgeVariant(currentUser.role)}>
                 {currentUser.role === 'super_admin' 
                   ? 'Full Access' 
-                  : 'Edit Only (No Lock/Settings)'}
+                  : 'Limited Access'}
               </Badge>
             </div>
           </div>
           <div className="mt-4 p-4 rounded-lg bg-muted/50">
             <p className="text-sm text-muted-foreground">
-              <strong>Super Admin:</strong> Can edit data, lock payroll, and modify global settings.<br />
-              <strong>Payroll Operator:</strong> Can only edit employee and attendance data.
+              <strong className="flex items-center gap-1">
+                <Unlock className="h-3 w-3" /> Super Admin:
+              </strong> 
+              Can edit data, lock payroll, and modify global settings.
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              <strong className="flex items-center gap-1">
+                <Lock className="h-3 w-3" /> Payroll Operator:
+              </strong> 
+              Can add employees, edit attendance, and run calculations. <em>Blocked from Lock Payroll and Settings.</em>
             </p>
           </div>
         </CardContent>
