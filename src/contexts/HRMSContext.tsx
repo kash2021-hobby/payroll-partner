@@ -9,6 +9,7 @@ import {
   UserRole,
 } from '@/types/hrms';
 import { calculatePayroll } from '@/lib/payroll-engine';
+import { Permission, checkPermission, hasPermissionForRole } from '@/lib/rbac';
 
 interface HRMSContextType {
   // Current user
@@ -39,9 +40,17 @@ interface HRMSContextType {
 
   // Audit
   auditLogs: AuditLog[];
+  addAuditLog: (
+    action: string,
+    entityType: AuditLog['entityType'],
+    entityId: string,
+    previousValue?: string,
+    newValue?: string
+  ) => void;
 
-  // Helpers
+  // RBAC Helpers
   hasPermission: (action: 'edit' | 'lock' | 'settings') => boolean;
+  checkUserPermission: (permission: Permission) => { allowed: boolean; message: string };
 }
 
 const defaultSettings: GlobalSettings = {
@@ -187,6 +196,11 @@ export function HRMSProvider({ children }: { children: React.ReactNode }) {
     if (currentUser.role === 'super_admin') return true;
     if (currentUser.role === 'payroll_operator' && action === 'edit') return true;
     return false;
+  }, [currentUser.role]);
+
+  // RBAC permission check with message
+  const checkUserPermission = useCallback((permission: Permission): { allowed: boolean; message: string } => {
+    return checkPermission(currentUser.role, permission);
   }, [currentUser.role]);
 
   const addEmployee = useCallback((employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -412,7 +426,9 @@ export function HRMSProvider({ children }: { children: React.ReactNode }) {
         globalSettings,
         updateSettings,
         auditLogs,
+        addAuditLog,
         hasPermission,
+        checkUserPermission,
       }}
     >
       {children}
