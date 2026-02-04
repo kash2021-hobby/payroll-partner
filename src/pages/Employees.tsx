@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { useHRMS } from '@/contexts/HRMSContext';
-import { Employee, SalaryType, MonthCalculationType } from '@/types/hrms';
-import { formatCurrency } from '@/lib/payroll-engine';
+import { useEmployees, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from '@/hooks/use-backend-data';
+import { BackendEmployee } from '@/lib/api-service';
 import {
   Table,
   TableBody,
@@ -21,7 +20,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -31,80 +29,86 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Pencil, Trash2, Search, UserPlus } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, Search, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
-const defaultEmployee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> = {
-  employeeId: '',
-  firstName: '',
-  lastName: '',
+interface EmployeeFormData {
+  full_name: string;
+  email: string;
+  phone: string;
+  dob: string;
+  joining_date: string;
+  employment_type: 'hourly' | 'daily' | 'weekly';
+  work_rate: number;
+  position: string;
+  department: string;
+  shift: 'morning' | 'evening' | 'night' | 'custom';
+  allowed_leaves: number;
+  status: 'active' | 'on-leave' | 'inactive';
+}
+
+const defaultFormData: EmployeeFormData = {
+  full_name: '',
   email: '',
+  phone: '',
+  dob: '',
+  joining_date: new Date().toISOString().split('T')[0],
+  employment_type: 'daily',
+  work_rate: 0,
+  position: '',
   department: '',
-  designation: '',
-  dateOfJoining: new Date(),
-  grossMonthlySalary: 0,
-  salaryType: 'monthly',
-  monthCalculationType: 'calendar',
-  isPFEnabled: true,
-  isESIEnabled: false,
-  isTDSEnabled: false,
-  bankAccountNumber: '',
-  bankName: '',
-  ifscCode: '',
-  isActive: true,
+  shift: 'morning',
+  allowed_leaves: 12,
+  status: 'active',
 };
 
 export default function Employees() {
-  const { employees, addEmployee, updateEmployee, deleteEmployee, hasPermission } = useHRMS();
+  const { data: employees, isLoading, error } = useEmployees();
+  const createEmployee = useCreateEmployee();
+  const updateEmployee = useUpdateEmployee();
+  const deleteEmployee = useDeleteEmployee();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [formData, setFormData] = useState(defaultEmployee);
+  const [editingEmployee, setEditingEmployee] = useState<BackendEmployee | null>(null);
+  const [formData, setFormData] = useState<EmployeeFormData>(defaultFormData);
 
-  const filteredEmployees = employees.filter(
+  const filteredEmployees = (employees || []).filter(
     (emp) =>
-      emp.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.employeeId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.department.toLowerCase().includes(searchQuery.toLowerCase())
+      emp.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.department?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.position?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.phone?.includes(searchQuery)
   );
 
-  const handleOpenDialog = (employee?: Employee) => {
+  const handleOpenDialog = (employee?: BackendEmployee) => {
     if (employee) {
       setEditingEmployee(employee);
       setFormData({
-        employeeId: employee.employeeId,
-        firstName: employee.firstName,
-        lastName: employee.lastName,
-        email: employee.email,
-        department: employee.department,
-        designation: employee.designation,
-        dateOfJoining: employee.dateOfJoining,
-        grossMonthlySalary: employee.grossMonthlySalary,
-        salaryType: employee.salaryType,
-        monthCalculationType: employee.monthCalculationType,
-        isPFEnabled: employee.isPFEnabled,
-        isESIEnabled: employee.isESIEnabled,
-        isTDSEnabled: employee.isTDSEnabled,
-        bankAccountNumber: employee.bankAccountNumber,
-        bankName: employee.bankName,
-        ifscCode: employee.ifscCode,
-        isActive: employee.isActive,
+        full_name: employee.full_name,
+        email: employee.email || '',
+        phone: employee.phone || '',
+        dob: employee.dob || '',
+        joining_date: employee.joining_date,
+        employment_type: employee.employment_type,
+        work_rate: employee.work_rate,
+        position: employee.position || '',
+        department: employee.department || '',
+        shift: employee.shift || 'morning',
+        allowed_leaves: employee.allowed_leaves,
+        status: employee.status,
       });
     } else {
       setEditingEmployee(null);
-      setFormData({
-        ...defaultEmployee,
-        employeeId: `EMP${String(employees.length + 1).padStart(3, '0')}`,
-      });
+      setFormData(defaultFormData);
     }
     setIsDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.firstName || !formData.lastName || !formData.email) {
+    if (!formData.full_name || !formData.joining_date) {
       toast({
         title: 'Validation Error',
         description: 'Please fill in all required fields.',
@@ -113,34 +117,84 @@ export default function Employees() {
       return;
     }
 
-    if (editingEmployee) {
-      updateEmployee(editingEmployee.id, formData);
-      toast({
-        title: 'Employee Updated',
-        description: `${formData.firstName} ${formData.lastName}'s profile has been updated.`,
-      });
-    } else {
-      addEmployee(formData);
-      toast({
-        title: 'Employee Added',
-        description: `${formData.firstName} ${formData.lastName} has been added to the system.`,
-      });
-    }
+    try {
+      if (editingEmployee) {
+        await updateEmployee.mutateAsync({ id: editingEmployee.id, data: formData });
+        toast({
+          title: 'Employee Updated',
+          description: `${formData.full_name}'s profile has been updated.`,
+        });
+      } else {
+        await createEmployee.mutateAsync(formData);
+        toast({
+          title: 'Employee Added',
+          description: `${formData.full_name} has been added to the system.`,
+        });
+      }
 
-    setIsDialogOpen(false);
-    setEditingEmployee(null);
-    setFormData(defaultEmployee);
-  };
-
-  const handleDelete = (employee: Employee) => {
-    if (confirm(`Are you sure you want to delete ${employee.firstName} ${employee.lastName}?`)) {
-      deleteEmployee(employee.id);
+      setIsDialogOpen(false);
+      setEditingEmployee(null);
+      setFormData(defaultFormData);
+    } catch (err) {
       toast({
-        title: 'Employee Deleted',
-        description: `${employee.firstName} ${employee.lastName} has been removed from the system.`,
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Something went wrong',
+        variant: 'destructive',
       });
     }
   };
+
+  const handleDelete = async (employee: BackendEmployee) => {
+    if (confirm(`Are you sure you want to delete ${employee.full_name}?`)) {
+      try {
+        await deleteEmployee.mutateAsync(employee.id);
+        toast({
+          title: 'Employee Deleted',
+          description: `${employee.full_name} has been removed from the system.`,
+        });
+      } catch (err) {
+        toast({
+          title: 'Error',
+          description: err instanceof Error ? err.message : 'Failed to delete employee',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active':
+        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+      case 'on-leave':
+        return <Badge className="bg-yellow-100 text-yellow-800">On Leave</Badge>;
+      case 'inactive':
+        return <Badge variant="secondary">Inactive</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Card className="p-6">
+          <p className="text-destructive">Failed to load employees: {error.message}</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Make sure your backend is running at the configured API URL.
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -174,43 +228,51 @@ export default function Employees() {
                   Basic Information
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="employeeId">Employee ID</Label>
+                  <div className="space-y-2 col-span-2">
+                    <Label htmlFor="full_name">Full Name *</Label>
                     <Input
-                      id="employeeId"
-                      value={formData.employeeId}
-                      onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-                      placeholder="EMP001"
+                      id="full_name"
+                      value={formData.full_name}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                      placeholder="John Doe"
+                      required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
+                    <Label htmlFor="email">Email</Label>
                     <Input
                       id="email"
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       placeholder="john@company.com"
-                      required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name *</Label>
+                    <Label htmlFor="phone">Phone</Label>
                     <Input
-                      id="firstName"
-                      value={formData.firstName}
-                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                      placeholder="John"
-                      required
+                      id="phone"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="9876543210"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name *</Label>
+                    <Label htmlFor="dob">Date of Birth</Label>
                     <Input
-                      id="lastName"
-                      value={formData.lastName}
-                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                      placeholder="Doe"
+                      id="dob"
+                      type="date"
+                      value={formData.dob}
+                      onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="joining_date">Joining Date *</Label>
+                    <Input
+                      id="joining_date"
+                      type="date"
+                      value={formData.joining_date}
+                      onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
                       required
                     />
                   </div>
@@ -224,11 +286,11 @@ export default function Employees() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="designation">Designation</Label>
+                    <Label htmlFor="position">Position</Label>
                     <Input
-                      id="designation"
-                      value={formData.designation}
-                      onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                      id="position"
+                      value={formData.position}
+                      onChange={(e) => setFormData({ ...formData, position: e.target.value })}
                       placeholder="Senior Developer"
                     />
                   </div>
@@ -242,148 +304,89 @@ export default function Employees() {
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="grossMonthlySalary">Gross Monthly Salary (₹)</Label>
-                    <Input
-                      id="grossMonthlySalary"
-                      type="number"
-                      value={formData.grossMonthlySalary}
-                      onChange={(e) =>
-                        setFormData({ ...formData, grossMonthlySalary: Number(e.target.value) })
-                      }
-                      placeholder="50000"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Salary Type</Label>
+                    <Label>Employment Type *</Label>
                     <Select
-                      value={formData.salaryType}
-                      onValueChange={(value: SalaryType) =>
-                        setFormData({ ...formData, salaryType: value })
+                      value={formData.employment_type}
+                      onValueChange={(value: 'hourly' | 'daily' | 'weekly') =>
+                        setFormData({ ...formData, employment_type: value })
                       }
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="hourly">Hourly</SelectItem>
                         <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label>Month Calculation Type</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="work_rate">
+                      Work Rate (₹/{formData.employment_type === 'hourly' ? 'hour' : formData.employment_type === 'daily' ? 'day' : 'week'})
+                    </Label>
+                    <Input
+                      id="work_rate"
+                      type="number"
+                      value={formData.work_rate}
+                      onChange={(e) =>
+                        setFormData({ ...formData, work_rate: Number(e.target.value) })
+                      }
+                      placeholder="500"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Shift</Label>
                     <Select
-                      value={formData.monthCalculationType}
-                      onValueChange={(value: MonthCalculationType) =>
-                        setFormData({ ...formData, monthCalculationType: value })
+                      value={formData.shift}
+                      onValueChange={(value: 'morning' | 'evening' | 'night' | 'custom') =>
+                        setFormData({ ...formData, shift: value })
                       }
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="calendar">Calendar Days (Actual days in month)</SelectItem>
-                        <SelectItem value="fixed_26">Fixed 26 Days</SelectItem>
+                        <SelectItem value="morning">Morning</SelectItem>
+                        <SelectItem value="evening">Evening</SelectItem>
+                        <SelectItem value="night">Night</SelectItem>
+                        <SelectItem value="custom">Custom</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-
-                {/* Toggles */}
-                <div className="grid grid-cols-3 gap-4 pt-2">
-                  <div className="flex items-center justify-between p-3 rounded-lg border">
-                    <div>
-                      <Label htmlFor="pf">PF Enabled</Label>
-                      <p className="text-xs text-muted-foreground">Provident Fund</p>
-                    </div>
-                    <Switch
-                      id="pf"
-                      checked={formData.isPFEnabled}
-                      onCheckedChange={(checked) =>
-                        setFormData({ ...formData, isPFEnabled: checked })
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg border">
-                    <div>
-                      <Label htmlFor="esi">ESI Enabled</Label>
-                      <p className="text-xs text-muted-foreground">State Insurance</p>
-                    </div>
-                    <Switch
-                      id="esi"
-                      checked={formData.isESIEnabled}
-                      onCheckedChange={(checked) =>
-                        setFormData({ ...formData, isESIEnabled: checked })
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg border">
-                    <div>
-                      <Label htmlFor="tds">TDS Flag</Label>
-                      <p className="text-xs text-muted-foreground">Tax Deduction</p>
-                    </div>
-                    <Switch
-                      id="tds"
-                      checked={formData.isTDSEnabled}
-                      onCheckedChange={(checked) =>
-                        setFormData({ ...formData, isTDSEnabled: checked })
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Bank Details */}
-              <div className="space-y-4">
-                <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                  Bank Details
-                </h3>
-                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="bankName">Bank Name</Label>
+                    <Label htmlFor="allowed_leaves">Allowed Leaves (per year)</Label>
                     <Input
-                      id="bankName"
-                      value={formData.bankName}
-                      onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                      placeholder="HDFC Bank"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bankAccountNumber">Account Number</Label>
-                    <Input
-                      id="bankAccountNumber"
-                      value={formData.bankAccountNumber}
+                      id="allowed_leaves"
+                      type="number"
+                      value={formData.allowed_leaves}
                       onChange={(e) =>
-                        setFormData({ ...formData, bankAccountNumber: e.target.value })
+                        setFormData({ ...formData, allowed_leaves: Number(e.target.value) })
                       }
-                      placeholder="1234567890"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ifscCode">IFSC Code</Label>
-                    <Input
-                      id="ifscCode"
-                      value={formData.ifscCode}
-                      onChange={(e) => setFormData({ ...formData, ifscCode: e.target.value })}
-                      placeholder="HDFC0001234"
+                      placeholder="12"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Active Status */}
-              <div className="flex items-center justify-between p-3 rounded-lg border">
-                <div>
-                  <Label htmlFor="active">Active Employee</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Inactive employees won't appear in payroll
-                  </p>
-                </div>
-                <Switch
-                  id="active"
-                  checked={formData.isActive}
-                  onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                />
+              {/* Status */}
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value: 'active' | 'on-leave' | 'inactive') =>
+                    setFormData({ ...formData, status: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="on-leave">On Leave</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
@@ -394,7 +397,13 @@ export default function Employees() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit">
+                <Button 
+                  type="submit" 
+                  disabled={createEmployee.isPending || updateEmployee.isPending}
+                >
+                  {(createEmployee.isPending || updateEmployee.isPending) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
                   {editingEmployee ? 'Update Employee' : 'Add Employee'}
                 </Button>
               </div>
@@ -409,7 +418,7 @@ export default function Employees() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search employees by name, ID, or department..."
+              placeholder="Search employees by name, department, or phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -423,97 +432,94 @@ export default function Employees() {
         <CardHeader>
           <CardTitle>Employee Directory</CardTitle>
           <CardDescription>
-            {filteredEmployees.length} of {employees.length} employees
+            {isLoading ? 'Loading...' : `${filteredEmployees.length} of ${employees?.length || 0} employees`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Gross Salary</TableHead>
-                  <TableHead>Config</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredEmployees.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No employees found
-                    </TableCell>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Employment Type</TableHead>
+                    <TableHead>Work Rate</TableHead>
+                    <TableHead>Leaves</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ) : (
-                  filteredEmployees.map((employee) => (
-                    <TableRow key={employee.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">
-                            {employee.firstName[0]}
-                            {employee.lastName[0]}
-                          </div>
-                          <div>
-                            <p className="font-medium">
-                              {employee.firstName} {employee.lastName}
-                            </p>
-                            <p className="text-sm text-muted-foreground">{employee.employeeId}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <p>{employee.department}</p>
-                        <p className="text-sm text-muted-foreground">{employee.designation}</p>
-                      </TableCell>
-                      <TableCell className="font-mono">
-                        {formatCurrency(employee.grossMonthlySalary)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          {employee.isPFEnabled && (
-                            <Badge variant="outline" className="text-xs">PF</Badge>
-                          )}
-                          {employee.isESIEnabled && (
-                            <Badge variant="outline" className="text-xs">ESI</Badge>
-                          )}
-                          {employee.isTDSEnabled && (
-                            <Badge variant="outline" className="text-xs border-warning text-warning">TDS</Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={employee.isActive ? 'default' : 'secondary'}>
-                          {employee.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(employee)}
-                            disabled={!hasPermission('edit')}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(employee)}
-                            disabled={!hasPermission('edit')}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredEmployees.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No employees found
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    filteredEmployees.map((employee) => (
+                      <TableRow key={employee.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                              <span className="text-sm font-medium text-primary">
+                                {employee.full_name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="font-medium">{employee.full_name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {employee.position || 'No position'}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{employee.department || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {employee.employment_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {formatCurrency(employee.work_rate)}/{employee.employment_type === 'hourly' ? 'hr' : employee.employment_type === 'daily' ? 'day' : 'wk'}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">
+                            {employee.taken_leaves}/{employee.allowed_leaves}
+                          </span>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(employee.status)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenDialog(employee)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(employee)}
+                              disabled={deleteEmployee.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
