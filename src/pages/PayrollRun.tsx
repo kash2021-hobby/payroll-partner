@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useHRMS } from '@/contexts/HRMSContext';
 import { formatCurrency, getDaysInMonth } from '@/lib/payroll-engine';
 import { calculateCoreSalary } from '@/lib/salary-calculator';
+import { generatePayslipPDF, PayslipData } from '@/lib/payslip-generator';
 import {
   Table,
   TableBody,
@@ -22,16 +23,23 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   Play, 
   Lock, 
   AlertTriangle, 
   CheckCircle2,
   Calculator,
-  DollarSign,
-  Minus,
-  Plus,
   RefreshCw,
+  FileDown,
+  Download,
+  ShieldCheck,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -41,23 +49,33 @@ const months = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const COMPANY_NAME = 'PayrollPro Technologies Pvt. Ltd.';
+
 interface PayrollGridRow {
   id: string;
   employeeId: string;
   employeeCode: string;
   employeeName: string;
+  department: string;
+  designation: string;
+  bankAccount: string;
+  bankName: string;
   presentDays: number;
   totalDays: number;
   // Calculated values
   gross: number;
   basic: number;
+  hra: number;
+  otherAllowances: number;
   pfAmount: number;
   esiAmount: number;
   tdsWarning: boolean;
   // Editable values
   manualTDS: number;
   arrearsAdjustment: number;
-  // Computed net
+  // Computed values
+  totalEarnings: number;
+  totalDeductions: number;
   netPayable: number;
   // Status
   isLocked: boolean;
@@ -71,7 +89,6 @@ export default function PayrollRun() {
     generatePayroll,
     lockPayroll,
     hasPermission,
-    currentUser,
   } = useHRMS();
   
   const currentDate = new Date();
@@ -79,6 +96,8 @@ export default function PayrollRun() {
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [payrollGrid, setPayrollGrid] = useState<PayrollGridRow[]>([]);
   const [isGenerated, setIsGenerated] = useState(false);
+  const [isMonthLocked, setIsMonthLocked] = useState(false);
+  const [showLockConfirmDialog, setShowLockConfirmDialog] = useState(false);
 
   const totalDays = getDaysInMonth(selectedYear, selectedMonth);
 
@@ -120,6 +139,11 @@ export default function PayrollRun() {
           emp.isESIEnabled
         );
 
+        // Calculate component breakdown
+        const basic = calculation.Basic;
+        const hra = Math.round(calculation.Gross * 0.20);
+        const otherAllowances = calculation.Gross - basic - hra;
+
         // Check if there's existing payroll data
         const existingPayroll = payrollRecords.find(
           p => p.employeeId === emp.id && p.month === selectedMonth && p.year === selectedYear
@@ -128,29 +152,33 @@ export default function PayrollRun() {
         const manualTDS = existingPayroll?.tdsDeduction ?? 0;
         const arrearsAdjustment = existingPayroll?.previousMonthAdjustment ?? 0;
 
-        // Calculate net payable
-        const netPayable = calculateNetPayable(
-          calculation.Gross,
-          arrearsAdjustment,
-          calculation.PF_Amount,
-          calculation.ESI_Amount,
-          manualTDS
-        );
+        // Calculate totals
+        const totalEarnings = calculation.Gross + arrearsAdjustment;
+        const totalDeductions = calculation.PF_Amount + calculation.ESI_Amount + manualTDS;
+        const netPayable = totalEarnings - totalDeductions;
 
         return {
           id: existingPayroll?.id ?? crypto.randomUUID(),
           employeeId: emp.id,
           employeeCode: emp.employeeId,
           employeeName: `${emp.firstName} ${emp.lastName}`,
+          department: emp.department,
+          designation: emp.designation,
+          bankAccount: emp.bankAccountNumber,
+          bankName: emp.bankName,
           presentDays,
           totalDays: employeeTotalDays,
           gross: calculation.Gross,
-          basic: calculation.Basic,
+          basic,
+          hra,
+          otherAllowances,
           pfAmount: calculation.PF_Amount,
           esiAmount: calculation.ESI_Amount,
           tdsWarning: calculation.TDS_Warning,
           manualTDS,
           arrearsAdjustment,
+          totalEarnings,
+          totalDeductions,
           netPayable,
           isLocked: existingPayroll?.isLocked ?? false,
         };
@@ -158,6 +186,7 @@ export default function PayrollRun() {
 
     setPayrollGrid(gridData);
     setIsGenerated(true);
+    setIsMonthLocked(gridData.length > 0 && gridData.every(r => r.isLocked));
     
     // Also trigger the context's generate payroll
     generatePayroll(selectedMonth, selectedYear);
@@ -166,71 +195,68 @@ export default function PayrollRun() {
       title: 'Payroll Generated',
       description: `Payroll for ${months[selectedMonth - 1]} ${selectedYear} has been calculated.`,
     });
-  }, [employees, attendanceRecords, payrollRecords, selectedMonth, selectedYear, totalDays, calculateNetPayable, generatePayroll]);
+  }, [employees, attendanceRecords, payrollRecords, selectedMonth, selectedYear, totalDays, generatePayroll]);
 
   /**
    * Handle Manual TDS change with instant recalculation
    */
   const handleManualTDSChange = useCallback((rowId: string, value: number) => {
+    if (isMonthLocked) return;
+    
     setPayrollGrid(prev => prev.map(row => {
       if (row.id === rowId && !row.isLocked) {
-        const newNetPayable = calculateNetPayable(
-          row.gross,
-          row.arrearsAdjustment,
-          row.pfAmount,
-          row.esiAmount,
-          value
-        );
+        const totalDeductions = row.pfAmount + row.esiAmount + value;
+        const netPayable = row.totalEarnings - totalDeductions;
         return {
           ...row,
           manualTDS: value,
-          netPayable: newNetPayable,
+          totalDeductions,
+          netPayable,
         };
       }
       return row;
     }));
-  }, [calculateNetPayable]);
+  }, [isMonthLocked]);
 
   /**
    * Handle Arrears Adjustment change with instant recalculation
    */
   const handleArrearsChange = useCallback((rowId: string, value: number) => {
+    if (isMonthLocked) return;
+    
     setPayrollGrid(prev => prev.map(row => {
       if (row.id === rowId && !row.isLocked) {
-        const newNetPayable = calculateNetPayable(
-          row.gross,
-          value,
-          row.pfAmount,
-          row.esiAmount,
-          row.manualTDS
-        );
+        const totalEarnings = row.gross + value;
+        const netPayable = totalEarnings - row.totalDeductions;
         return {
           ...row,
           arrearsAdjustment: value,
-          netPayable: newNetPayable,
+          totalEarnings,
+          netPayable,
         };
       }
       return row;
     }));
-  }, [calculateNetPayable]);
+  }, [isMonthLocked]);
 
   /**
    * Recalculate all rows
    */
   const handleRecalculateAll = useCallback(() => {
+    if (isMonthLocked) return;
+    
     setPayrollGrid(prev => prev.map(row => {
       if (row.isLocked) return row;
       
-      const newNetPayable = calculateNetPayable(
-        row.gross,
-        row.arrearsAdjustment,
-        row.pfAmount,
-        row.esiAmount,
-        row.manualTDS
-      );
+      const totalEarnings = row.gross + row.arrearsAdjustment;
+      const totalDeductions = row.pfAmount + row.esiAmount + row.manualTDS;
+      const netPayable = totalEarnings - totalDeductions;
+      
       return {
         ...row,
-        netPayable: newNetPayable,
+        totalEarnings,
+        totalDeductions,
+        netPayable,
       };
     }));
 
@@ -238,12 +264,13 @@ export default function PayrollRun() {
       title: 'Recalculated',
       description: 'All payroll values have been recalculated.',
     });
-  }, [calculateNetPayable]);
+  }, [isMonthLocked]);
 
   /**
-   * Lock a single record
+   * LOCK_PAYROLL: Lock the entire month's payroll
+   * This prevents any further edits for the month
    */
-  const handleLockRecord = useCallback((rowId: string) => {
+  const handleLockPayroll = useCallback(() => {
     if (!hasPermission('lock')) {
       toast({
         title: 'Permission Denied',
@@ -253,45 +280,79 @@ export default function PayrollRun() {
       return;
     }
 
-    setPayrollGrid(prev => prev.map(row => {
-      if (row.id === rowId) {
-        return { ...row, isLocked: true };
-      }
-      return row;
-    }));
-
-    // Also lock in context
-    const row = payrollGrid.find(r => r.id === rowId);
-    if (row) {
-      lockPayroll(rowId);
-    }
-
-    toast({
-      title: 'Record Locked',
-      description: 'This payroll record is now read-only.',
-    });
-  }, [hasPermission, payrollGrid, lockPayroll]);
-
-  /**
-   * Lock all records
-   */
-  const handleLockAll = useCallback(() => {
-    if (!hasPermission('lock')) {
-      toast({
-        title: 'Permission Denied',
-        description: 'Only Super Admin can lock payroll records.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+    // Lock all records in the grid
     setPayrollGrid(prev => prev.map(row => ({ ...row, isLocked: true })));
+    setIsMonthLocked(true);
+
+    // Lock in context for each record
+    payrollGrid.forEach(row => {
+      if (!row.isLocked) {
+        lockPayroll(row.id);
+      }
+    });
+
+    setShowLockConfirmDialog(false);
 
     toast({
-      title: 'All Records Locked',
-      description: `Payroll for ${months[selectedMonth - 1]} ${selectedYear} has been locked.`,
+      title: 'Payroll Locked',
+      description: `Payroll for ${months[selectedMonth - 1]} ${selectedYear} has been finalized. No further edits allowed.`,
     });
-  }, [hasPermission, selectedMonth, selectedYear]);
+  }, [hasPermission, payrollGrid, lockPayroll, selectedMonth, selectedYear]);
+
+  /**
+   * Generate PDF Payslip for a single employee
+   */
+  const handleGeneratePayslip = useCallback((row: PayrollGridRow) => {
+    const payslipData: PayslipData = {
+      companyName: COMPANY_NAME,
+      employeeId: row.employeeId,
+      employeeCode: row.employeeCode,
+      employeeName: row.employeeName,
+      department: row.department,
+      designation: row.designation,
+      bankAccount: row.bankAccount,
+      bankName: row.bankName,
+      month: months[selectedMonth - 1],
+      year: selectedYear,
+      presentDays: row.presentDays,
+      totalDays: row.totalDays,
+      gross: row.gross,
+      basic: row.basic,
+      hra: row.hra,
+      otherAllowances: row.otherAllowances,
+      arrears: row.arrearsAdjustment,
+      totalEarnings: row.totalEarnings,
+      pfAmount: row.pfAmount,
+      esiAmount: row.esiAmount,
+      tdsAmount: row.manualTDS,
+      totalDeductions: row.totalDeductions,
+      netPayable: row.netPayable,
+      generatedDate: new Date(),
+    };
+
+    generatePayslipPDF(payslipData);
+
+    toast({
+      title: 'Payslip Generated',
+      description: `PDF payslip for ${row.employeeName} has been downloaded.`,
+    });
+  }, [selectedMonth, selectedYear]);
+
+  /**
+   * Generate PDF Payslips for all employees
+   */
+  const handleGenerateAllPayslips = useCallback(() => {
+    payrollGrid.forEach((row, index) => {
+      setTimeout(() => {
+        handleGeneratePayslip(row);
+      }, index * 600); // Stagger downloads to prevent browser issues
+    });
+
+    toast({
+      title: 'Generating Payslips',
+      description: `Downloading ${payrollGrid.length} payslips. Please wait...`,
+    });
+  }, [payrollGrid, handleGeneratePayslip]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -302,14 +363,14 @@ export default function PayrollRun() {
         esiAmount: acc.esiAmount + row.esiAmount,
         manualTDS: acc.manualTDS + row.manualTDS,
         arrearsAdjustment: acc.arrearsAdjustment + row.arrearsAdjustment,
+        totalDeductions: acc.totalDeductions + row.totalDeductions,
         netPayable: acc.netPayable + row.netPayable,
       }),
-      { gross: 0, pfAmount: 0, esiAmount: 0, manualTDS: 0, arrearsAdjustment: 0, netPayable: 0 }
+      { gross: 0, pfAmount: 0, esiAmount: 0, manualTDS: 0, arrearsAdjustment: 0, totalDeductions: 0, netPayable: 0 }
     );
   }, [payrollGrid]);
 
   const years = Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i);
-  const allLocked = payrollGrid.length > 0 && payrollGrid.every(r => r.isLocked);
   const hasUnlockedRows = payrollGrid.some(r => !r.isLocked);
 
   return (
@@ -319,7 +380,7 @@ export default function PayrollRun() {
           <h1 className="text-2xl font-bold text-foreground">Payroll Run</h1>
           <p className="text-muted-foreground">Generate, adjust, and finalize monthly payroll</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button 
             variant="outline" 
             onClick={handleGeneratePayroll}
@@ -328,7 +389,7 @@ export default function PayrollRun() {
             <Calculator className="h-4 w-4" />
             {isGenerated ? 'Regenerate' : 'Generate'} Payroll
           </Button>
-          {isGenerated && hasUnlockedRows && (
+          {isGenerated && !isMonthLocked && (
             <>
               <Button 
                 variant="outline" 
@@ -336,18 +397,45 @@ export default function PayrollRun() {
                 className="gap-2"
               >
                 <RefreshCw className="h-4 w-4" />
-                Recalculate All
+                Recalculate
               </Button>
-              {hasPermission('lock') && (
-                <Button onClick={handleLockAll} className="gap-2">
+              {hasPermission('lock') && hasUnlockedRows && (
+                <Button 
+                  onClick={() => setShowLockConfirmDialog(true)} 
+                  variant="default"
+                  className="gap-2"
+                >
                   <Lock className="h-4 w-4" />
-                  Lock All
+                  Finalize & Lock
                 </Button>
               )}
             </>
           )}
+          {isGenerated && payrollGrid.length > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={handleGenerateAllPayslips}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Download All Payslips
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Locked Status Banner */}
+      {isMonthLocked && (
+        <div className="bg-success/10 border border-success/20 rounded-lg p-4 flex items-center gap-3">
+          <ShieldCheck className="h-6 w-6 text-success" />
+          <div>
+            <p className="font-semibold text-success">Payroll Finalized & Locked</p>
+            <p className="text-sm text-muted-foreground">
+              {months[selectedMonth - 1]} {selectedYear} payroll is locked. No further edits are allowed.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Period Selection */}
       <Card>
@@ -362,6 +450,7 @@ export default function PayrollRun() {
                 setSelectedMonth(Number(v));
                 setIsGenerated(false);
                 setPayrollGrid([]);
+                setIsMonthLocked(false);
               }}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue />
@@ -381,6 +470,7 @@ export default function PayrollRun() {
                 setSelectedYear(Number(v));
                 setIsGenerated(false);
                 setPayrollGrid([]);
+                setIsMonthLocked(false);
               }}>
                 <SelectTrigger className="w-[120px]">
                   <SelectValue />
@@ -463,10 +553,10 @@ export default function PayrollRun() {
               ? `${months[selectedMonth - 1]} ${selectedYear} • ${payrollGrid.length} employees`
               : 'Click "Generate Payroll" to load data'
             }
-            {allLocked && (
-              <Badge className="ml-2" variant="secondary">
+            {isMonthLocked && (
+              <Badge className="ml-2 bg-success" variant="secondary">
                 <Lock className="h-3 w-3 mr-1" />
-                All Locked
+                Locked
               </Badge>
             )}
           </CardDescription>
@@ -500,8 +590,7 @@ export default function PayrollRun() {
                     <TableHead className="text-center w-[130px]">Manual TDS (₹)</TableHead>
                     <TableHead className="text-center w-[150px]">Arrears (+/-) ₹</TableHead>
                     <TableHead className="text-right w-[120px]">Net Payable</TableHead>
-                    <TableHead className="text-center w-[100px]">Status</TableHead>
-                    <TableHead className="text-right w-[80px]">Action</TableHead>
+                    <TableHead className="text-center w-[100px]">Payslip</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -510,7 +599,7 @@ export default function PayrollRun() {
                       key={row.id}
                       className={cn(
                         row.tdsWarning && 'bg-warning/5',
-                        row.isLocked && 'opacity-75'
+                        isMonthLocked && 'opacity-75'
                       )}
                     >
                       <TableCell className="sticky left-0 bg-card">
@@ -544,7 +633,7 @@ export default function PayrollRun() {
                           min={0}
                           value={row.manualTDS}
                           onChange={(e) => handleManualTDSChange(row.id, Number(e.target.value) || 0)}
-                          disabled={row.isLocked}
+                          disabled={isMonthLocked || row.isLocked}
                           className="w-24 text-center mx-auto"
                           placeholder="0"
                         />
@@ -554,7 +643,7 @@ export default function PayrollRun() {
                           type="number"
                           value={row.arrearsAdjustment}
                           onChange={(e) => handleArrearsChange(row.id, Number(e.target.value) || 0)}
-                          disabled={row.isLocked}
+                          disabled={isMonthLocked || row.isLocked}
                           className="w-28 text-center mx-auto"
                           placeholder="0"
                         />
@@ -567,28 +656,15 @@ export default function PayrollRun() {
                         </span>
                       </TableCell>
                       <TableCell className="text-center">
-                        {row.isLocked ? (
-                          <Badge variant="secondary" className="gap-1">
-                            <Lock className="h-3 w-3" />
-                            Locked
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="gap-1">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Ready
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {!row.isLocked && hasPermission('lock') && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleLockRecord(row.id)}
-                          >
-                            <Lock className="h-3 w-3" />
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleGeneratePayslip(row)}
+                          className="gap-1"
+                        >
+                          <FileDown className="h-4 w-4" />
+                          PDF
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -620,7 +696,6 @@ export default function PayrollRun() {
                       {formatCurrency(totals.netPayable)}
                     </TableCell>
                     <TableCell></TableCell>
-                    <TableCell></TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -633,38 +708,88 @@ export default function PayrollRun() {
       {isGenerated && payrollGrid.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Calculation Details</CardTitle>
+            <CardTitle className="text-base">Payslip Contents</CardTitle>
+            <CardDescription>Each PDF payslip includes the following</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
               <div className="p-3 rounded-lg bg-muted/50">
-                <strong>Gross (Pro-Rata):</strong>
+                <strong>Header:</strong>
                 <p className="text-xs text-muted-foreground mt-1">
-                  (Monthly Salary ÷ Days in Month) × Present Days
+                  Company Name, Employee Name, Employee ID, Department
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-muted/50">
-                <strong>PF Deduction:</strong>
+                <strong>Earnings:</strong>
                 <p className="text-xs text-muted-foreground mt-1">
-                  12% of Basic (if enabled & Basic ≤ ₹15,000)
+                  Basic (50%), HRA (20%), Other Allowances, Arrears
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-muted/50">
-                <strong>ESI Deduction:</strong>
+                <strong>Deductions:</strong>
                 <p className="text-xs text-muted-foreground mt-1">
-                  0.75% of Gross (if enabled & Gross ≤ ₹21,000)
+                  PF, ESI, TDS / Manual TDS
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-muted/50">
-                <strong>TDS Warning:</strong>
+                <strong>Summary:</strong>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Flagged if Gross &gt; ₹50,000
+                  Total Earnings, Total Deductions, Net Payable
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Lock Confirmation Dialog */}
+      <Dialog open={showLockConfirmDialog} onOpenChange={setShowLockConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              Finalize & Lock Payroll
+            </DialogTitle>
+            <DialogDescription>
+              You are about to lock the payroll for <strong>{months[selectedMonth - 1]} {selectedYear}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="p-4 rounded-lg bg-warning/10 border border-warning/20">
+              <p className="text-sm text-warning font-medium mb-2">⚠️ This action cannot be undone</p>
+              <p className="text-sm text-muted-foreground">
+                Once locked, no further changes can be made to:
+              </p>
+              <ul className="text-sm text-muted-foreground mt-2 list-disc list-inside">
+                <li>Manual TDS amounts</li>
+                <li>Arrears/Adjustments</li>
+                <li>Any salary calculations</li>
+              </ul>
+            </div>
+
+            <div className="p-4 rounded-lg bg-muted/50">
+              <p className="text-sm font-medium mb-2">Summary</p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="text-muted-foreground">Employees:</span>
+                <span className="font-mono">{payrollGrid.length}</span>
+                <span className="text-muted-foreground">Total Net Payable:</span>
+                <span className="font-mono font-semibold">{formatCurrency(totals.netPayable)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setShowLockConfirmDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleLockPayroll} className="gap-2">
+              <Lock className="h-4 w-4" />
+              Confirm & Lock
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
