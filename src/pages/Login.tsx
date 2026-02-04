@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authAPI, setAuthToken } from '@/lib/api-service';
+import { authAPI } from '@/lib/api-service';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { toast } from '@/hooks/use-toast';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -30,7 +32,7 @@ export default function Login() {
 
     try {
       const response = await authAPI.login(email, password);
-      setAuthToken(response.token);
+      login(response.token);
       toast({
         title: 'Login Successful',
         description: 'Welcome back!',
