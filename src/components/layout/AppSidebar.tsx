@@ -7,7 +7,9 @@ import {
   Shield,
   Settings,
   Building2,
+  LogOut,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import {
   Sidebar,
@@ -22,7 +24,9 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { useHRMS } from '@/contexts/HRMSContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 const mainNavItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
@@ -39,6 +43,13 @@ const adminNavItems = [
 
 export function AppSidebar() {
   const { currentUser } = useHRMS();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <Sidebar className="border-r border-sidebar-border">
@@ -121,6 +132,14 @@ export function AppSidebar() {
               {currentUser.role === 'super_admin' ? 'Super Admin' : 'Payroll Operator'}
             </Badge>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            className="h-8 w-8 text-sidebar-muted hover:text-sidebar-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>
