@@ -72,7 +72,8 @@ interface PayrollGridRow {
   tdsWarning: boolean;
   // Editable values
   manualTDS: number;
-  arrearsAdjustment: number;
+  prevMonthAdjustment: number;
+  oneTimeBonus: number;
   // Computed values
   totalEarnings: number;
   totalDeductions: number;
@@ -105,16 +106,17 @@ export default function PayrollRun() {
 
   /**
    * Calculate Net Payable using the formula:
-   * Net = Gross + Arrears - PF - ESI - Manual_TDS
+   * Net = Gross + Prev Month Adj + One-Time Bonus - PF - ESI - Manual_TDS
    */
   const calculateNetPayable = useCallback((
     gross: number,
-    arrearsAdjustment: number,
+    prevMonthAdjustment: number,
+    oneTimeBonus: number,
     pfAmount: number,
     esiAmount: number,
     manualTDS: number
   ): number => {
-    return Math.round(gross + arrearsAdjustment - pfAmount - esiAmount - manualTDS);
+    return Math.round(gross + prevMonthAdjustment + oneTimeBonus - pfAmount - esiAmount - manualTDS);
   }, []);
 
   /**
@@ -152,10 +154,11 @@ export default function PayrollRun() {
         );
 
         const manualTDS = existingPayroll?.tdsDeduction ?? 0;
-        const arrearsAdjustment = existingPayroll?.previousMonthAdjustment ?? 0;
+        const prevMonthAdjustment = existingPayroll?.previousMonthAdjustment ?? 0;
+        const oneTimeBonus = existingPayroll?.oneTimeBonus ?? 0;
 
         // Calculate totals
-        const totalEarnings = calculation.Gross + arrearsAdjustment;
+        const totalEarnings = calculation.Gross + prevMonthAdjustment + oneTimeBonus;
         const totalDeductions = calculation.PF_Amount + calculation.ESI_Amount + manualTDS;
         const netPayable = totalEarnings - totalDeductions;
 
@@ -178,7 +181,8 @@ export default function PayrollRun() {
           esiAmount: calculation.ESI_Amount,
           tdsWarning: calculation.TDS_Warning,
           manualTDS,
-          arrearsAdjustment,
+          prevMonthAdjustment,
+          oneTimeBonus,
           totalEarnings,
           totalDeductions,
           netPayable,
@@ -246,13 +250,11 @@ export default function PayrollRun() {
   }, [isMonthLocked, checkUserPermission, addAuditLog]);
 
   /**
-   * Handle Arrears Adjustment change with instant recalculation
-   * Creates audit log entry for salary modification
+   * Handle Prev Month Adjustment change with instant recalculation
    */
-  const handleArrearsChange = useCallback((rowId: string, value: number) => {
+  const handlePrevMonthAdjustmentChange = useCallback((rowId: string, value: number) => {
     if (isMonthLocked) return;
     
-    // RBAC check for payroll adjustment
     const permission = checkUserPermission('payroll:adjust');
     if (!permission.allowed) {
       toast({
@@ -265,24 +267,66 @@ export default function PayrollRun() {
     
     setPayrollGrid(prev => prev.map(row => {
       if (row.id === rowId && !row.isLocked) {
-        const oldArrears = row.arrearsAdjustment;
-        const totalEarnings = row.gross + value;
+        const oldValue = row.prevMonthAdjustment;
+        const totalEarnings = row.gross + value + row.oneTimeBonus;
         const netPayable = totalEarnings - row.totalDeductions;
         
-        // Create audit log for Arrears modification
-        if (oldArrears !== value) {
+        if (oldValue !== value) {
           addAuditLog(
-            'Modified Arrears Adjustment',
+            'Modified Prev Month Adjustment',
             'payroll',
             row.employeeCode,
-            `Arrears: ₹${oldArrears}, Net: ₹${row.netPayable}`,
-            `Arrears: ₹${value}, Net: ₹${netPayable}`
+            `Adjustment: ₹${oldValue}, Net: ₹${row.netPayable}`,
+            `Adjustment: ₹${value}, Net: ₹${netPayable}`
           );
         }
         
         return {
           ...row,
-          arrearsAdjustment: value,
+          prevMonthAdjustment: value,
+          totalEarnings,
+          netPayable,
+        };
+      }
+      return row;
+    }));
+  }, [isMonthLocked, checkUserPermission, addAuditLog]);
+
+  /**
+   * Handle One-Time Bonus change with instant recalculation
+   */
+  const handleOneTimeBonusChange = useCallback((rowId: string, value: number) => {
+    if (isMonthLocked) return;
+    
+    const permission = checkUserPermission('payroll:adjust');
+    if (!permission.allowed) {
+      toast({
+        title: 'Permission Denied',
+        description: permission.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setPayrollGrid(prev => prev.map(row => {
+      if (row.id === rowId && !row.isLocked) {
+        const oldValue = row.oneTimeBonus;
+        const totalEarnings = row.gross + row.prevMonthAdjustment + value;
+        const netPayable = totalEarnings - row.totalDeductions;
+        
+        if (oldValue !== value) {
+          addAuditLog(
+            'Modified One-Time Bonus',
+            'payroll',
+            row.employeeCode,
+            `Bonus: ₹${oldValue}, Net: ₹${row.netPayable}`,
+            `Bonus: ₹${value}, Net: ₹${netPayable}`
+          );
+        }
+        
+        return {
+          ...row,
+          oneTimeBonus: value,
           totalEarnings,
           netPayable,
         };
@@ -300,7 +344,7 @@ export default function PayrollRun() {
     setPayrollGrid(prev => prev.map(row => {
       if (row.isLocked) return row;
       
-      const totalEarnings = row.gross + row.arrearsAdjustment;
+      const totalEarnings = row.gross + row.prevMonthAdjustment + row.oneTimeBonus;
       const totalDeductions = row.pfAmount + row.esiAmount + row.manualTDS;
       const netPayable = totalEarnings - totalDeductions;
       
@@ -372,7 +416,7 @@ export default function PayrollRun() {
       basic: row.basic,
       hra: row.hra,
       otherAllowances: row.otherAllowances,
-      arrears: row.arrearsAdjustment,
+      arrears: row.prevMonthAdjustment + row.oneTimeBonus,
       totalEarnings: row.totalEarnings,
       pfAmount: row.pfAmount,
       esiAmount: row.esiAmount,
@@ -414,11 +458,12 @@ export default function PayrollRun() {
         pfAmount: acc.pfAmount + row.pfAmount,
         esiAmount: acc.esiAmount + row.esiAmount,
         manualTDS: acc.manualTDS + row.manualTDS,
-        arrearsAdjustment: acc.arrearsAdjustment + row.arrearsAdjustment,
+        prevMonthAdjustment: acc.prevMonthAdjustment + row.prevMonthAdjustment,
+        oneTimeBonus: acc.oneTimeBonus + row.oneTimeBonus,
         totalDeductions: acc.totalDeductions + row.totalDeductions,
         netPayable: acc.netPayable + row.netPayable,
       }),
-      { gross: 0, pfAmount: 0, esiAmount: 0, manualTDS: 0, arrearsAdjustment: 0, totalDeductions: 0, netPayable: 0 }
+      { gross: 0, pfAmount: 0, esiAmount: 0, manualTDS: 0, prevMonthAdjustment: 0, oneTimeBonus: 0, totalDeductions: 0, netPayable: 0 }
     );
   }, [payrollGrid]);
 
@@ -546,7 +591,7 @@ export default function PayrollRun() {
           <div className="flex items-center gap-2 text-sm">
             <span className="font-medium">Formula:</span>
             <code className="bg-background px-2 py-1 rounded text-xs">
-              Net Payable = Gross + Arrears - PF - ESI - Manual_TDS
+              Net Payable = Gross + Prev Month Adj + One-Time Bonus - PF - ESI - Manual TDS
             </code>
           </div>
         </CardContent>
@@ -554,7 +599,7 @@ export default function PayrollRun() {
 
       {/* Summary Stats */}
       {isGenerated && payrollGrid.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <Card>
             <CardContent className="pt-4 pb-4">
               <p className="text-xs text-muted-foreground">Gross Total</p>
@@ -581,10 +626,16 @@ export default function PayrollRun() {
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground">Arrears Total</p>
-              <p className={cn("text-lg font-bold", totals.arrearsAdjustment >= 0 ? "text-success" : "text-destructive")}>
-                {totals.arrearsAdjustment >= 0 ? '+' : ''}{formatCurrency(totals.arrearsAdjustment)}
+              <p className="text-xs text-muted-foreground">Prev. Adj Total</p>
+              <p className={cn("text-lg font-bold", totals.prevMonthAdjustment >= 0 ? "text-success" : "text-destructive")}>
+                {totals.prevMonthAdjustment >= 0 ? '+' : ''}{formatCurrency(totals.prevMonthAdjustment)}
               </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-muted-foreground">Bonus Total</p>
+              <p className="text-lg font-bold text-success">+{formatCurrency(totals.oneTimeBonus)}</p>
             </CardContent>
           </Card>
           <Card className="bg-primary text-primary-foreground">
@@ -634,15 +685,16 @@ export default function PayrollRun() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead className="sticky left-0 bg-muted/50">Employee</TableHead>
-                    <TableHead className="text-center w-[80px]">Days</TableHead>
-                    <TableHead className="text-right w-[110px]">Gross</TableHead>
-                    <TableHead className="text-right w-[100px]">PF</TableHead>
-                    <TableHead className="text-right w-[100px]">ESI</TableHead>
-                    <TableHead className="text-center w-[130px]">Manual TDS (₹)</TableHead>
-                    <TableHead className="text-center w-[150px]">Arrears (+/-) ₹</TableHead>
+                    <TableHead className="sticky left-0 bg-muted/50">Name</TableHead>
+                    <TableHead className="text-center w-[90px]">Present Days</TableHead>
+                    <TableHead className="text-right w-[120px]">Gross Salary</TableHead>
+                    <TableHead className="text-right w-[100px]">PF Deduction</TableHead>
+                    <TableHead className="text-right w-[100px]">ESI Deduction</TableHead>
+                    <TableHead className="text-center w-[120px]">Manual TDS (₹)</TableHead>
+                    <TableHead className="text-center w-[130px]">Prev. Month Adj (₹)</TableHead>
+                    <TableHead className="text-center w-[130px]">One-Time Bonus (₹)</TableHead>
                     <TableHead className="text-right w-[120px]">Net Payable</TableHead>
-                    <TableHead className="text-center w-[100px]">Payslip</TableHead>
+                    <TableHead className="text-center w-[80px]">Payslip</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -693,8 +745,19 @@ export default function PayrollRun() {
                       <TableCell className="text-center">
                         <Input
                           type="number"
-                          value={row.arrearsAdjustment}
-                          onChange={(e) => handleArrearsChange(row.id, Number(e.target.value) || 0)}
+                          value={row.prevMonthAdjustment}
+                          onChange={(e) => handlePrevMonthAdjustmentChange(row.id, Number(e.target.value) || 0)}
+                          disabled={isMonthLocked || row.isLocked}
+                          className="w-28 text-center mx-auto"
+                          placeholder="0"
+                        />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={row.oneTimeBonus}
+                          onChange={(e) => handleOneTimeBonusChange(row.id, Number(e.target.value) || 0)}
                           disabled={isMonthLocked || row.isLocked}
                           className="w-28 text-center mx-auto"
                           placeholder="0"
@@ -740,9 +803,12 @@ export default function PayrollRun() {
                     </TableCell>
                     <TableCell className={cn(
                       "text-center font-mono",
-                      totals.arrearsAdjustment >= 0 ? "text-success" : "text-destructive"
+                      totals.prevMonthAdjustment >= 0 ? "text-success" : "text-destructive"
                     )}>
-                      {totals.arrearsAdjustment >= 0 ? '+' : ''}{formatCurrency(totals.arrearsAdjustment)}
+                      {totals.prevMonthAdjustment >= 0 ? '+' : ''}{formatCurrency(totals.prevMonthAdjustment)}
+                    </TableCell>
+                    <TableCell className="text-center font-mono text-success">
+                      +{formatCurrency(totals.oneTimeBonus)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-lg">
                       {formatCurrency(totals.netPayable)}
