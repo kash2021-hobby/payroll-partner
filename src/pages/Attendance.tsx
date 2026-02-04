@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useEmployees, useAttendance } from '@/hooks/use-backend-data';
-import { BackendEmployee, BackendAttendance } from '@/lib/api-service';
+import { useEmployees, useAttendance, MockEmployee, MockAttendance } from '@/hooks/use-mock-data';
 import {
   Table,
   TableBody,
@@ -47,7 +46,7 @@ interface AttendanceSummary {
   absentDays: number;
   leaveDays: number;
   totalHours: number;
-  records: BackendAttendance[];
+  records: MockAttendance[];
 }
 
 export default function Attendance() {
@@ -366,9 +365,13 @@ export default function Attendance() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <p className="font-medium">{record.Employee?.full_name || 'Unknown'}</p>
+                            <p className="font-medium">
+                              {employees?.find(e => e.id === record.employee_id)?.full_name || 'Unknown'}
+                            </p>
                           </TableCell>
-                          <TableCell>{record.Employee?.department || '-'}</TableCell>
+                          <TableCell>
+                            {employees?.find(e => e.id === record.employee_id)?.department || '-'}
+                          </TableCell>
                           <TableCell>{formatTime(record.sign_in)}</TableCell>
                           <TableCell>{formatTime(record.sign_out)}</TableCell>
                           <TableCell>

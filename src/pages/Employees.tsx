@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useEmployees, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from '@/hooks/use-backend-data';
-import { BackendEmployee } from '@/lib/api-service';
+import { useEmployees, useCreateEmployee, useUpdateEmployee, useDeleteEmployee, MockEmployee } from '@/hooks/use-mock-data';
 import {
   Table,
   TableBody,
@@ -36,9 +35,9 @@ import { toast } from '@/hooks/use-toast';
 
 interface EmployeeFormData {
   full_name: string;
-  employment_type: 'monthly' | 'daily';
-  work_rate: number;
-  month_calculation_type: 'calendar' | 'fixed_26';
+  salary_type: 'monthly' | 'daily';
+  base_amount: number;
+  working_days_rule: 'calendar' | 'fixed_26';
   is_pf_enabled: boolean;
   is_esi_enabled: boolean;
   is_tds_enabled: boolean;
@@ -47,9 +46,9 @@ interface EmployeeFormData {
 
 const defaultFormData: EmployeeFormData = {
   full_name: '',
-  employment_type: 'monthly',
-  work_rate: 0,
-  month_calculation_type: 'calendar',
+  salary_type: 'monthly',
+  base_amount: 0,
+  working_days_rule: 'calendar',
   is_pf_enabled: true,
   is_esi_enabled: false,
   is_tds_enabled: false,
@@ -64,7 +63,7 @@ export default function Employees() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<BackendEmployee | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<MockEmployee | null>(null);
   const [formData, setFormData] = useState<EmployeeFormData>(defaultFormData);
 
   const filteredEmployees = (employees || []).filter(
@@ -73,17 +72,17 @@ export default function Employees() {
       emp.department?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleOpenDialog = (employee?: BackendEmployee) => {
+  const handleOpenDialog = (employee?: MockEmployee) => {
     if (employee) {
       setEditingEmployee(employee);
       setFormData({
         full_name: employee.full_name,
-        employment_type: employee.employment_type === 'daily' ? 'daily' : 'monthly',
-        work_rate: employee.work_rate,
-        month_calculation_type: (employee as any).month_calculation_type || 'calendar',
-        is_pf_enabled: (employee as any).is_pf_enabled ?? true,
-        is_esi_enabled: (employee as any).is_esi_enabled ?? false,
-        is_tds_enabled: (employee as any).is_tds_enabled ?? false,
+        salary_type: employee.salary_type,
+        base_amount: employee.base_amount,
+        working_days_rule: employee.working_days_rule,
+        is_pf_enabled: employee.is_pf_enabled,
+        is_esi_enabled: employee.is_esi_enabled,
+        is_tds_enabled: employee.is_tds_enabled,
         status: employee.status,
       });
     } else {
@@ -137,7 +136,7 @@ export default function Employees() {
     }
   };
 
-  const handleDelete = async (employee: BackendEmployee) => {
+  const handleDelete = async (employee: MockEmployee) => {
     if (confirm(`Are you sure you want to delete ${employee.full_name}?`)) {
       try {
         await deleteEmployee.mutateAsync(employee.id);
@@ -239,9 +238,9 @@ export default function Employees() {
               <div className="space-y-2">
                 <Label>Salary Type</Label>
                 <Select
-                  value={formData.employment_type}
+                  value={formData.salary_type}
                   onValueChange={(value: 'monthly' | 'daily') =>
-                    setFormData({ ...formData, employment_type: value })
+                    setFormData({ ...formData, salary_type: value })
                   }
                 >
                   <SelectTrigger>
@@ -256,14 +255,14 @@ export default function Employees() {
 
               {/* Base Amount */}
               <div className="space-y-2">
-                <Label htmlFor="work_rate">
-                  Base Amount (₹/{formData.employment_type === 'daily' ? 'day' : 'month'})
+                <Label htmlFor="base_amount">
+                  Base Amount (₹/{formData.salary_type === 'daily' ? 'day' : 'month'})
                 </Label>
                 <Input
-                  id="work_rate"
+                  id="base_amount"
                   type="number"
-                  value={formData.work_rate}
-                  onChange={(e) => setFormData({ ...formData, work_rate: Number(e.target.value) })}
+                  value={formData.base_amount}
+                  onChange={(e) => setFormData({ ...formData, base_amount: Number(e.target.value) })}
                   placeholder="Enter amount"
                 />
               </div>
@@ -272,9 +271,9 @@ export default function Employees() {
               <div className="space-y-2">
                 <Label>Working Days Rule</Label>
                 <Select
-                  value={formData.month_calculation_type}
+                  value={formData.working_days_rule}
                   onValueChange={(value: 'calendar' | 'fixed_26') =>
-                    setFormData({ ...formData, month_calculation_type: value })
+                    setFormData({ ...formData, working_days_rule: value })
                   }
                 >
                   <SelectTrigger>
@@ -443,22 +442,22 @@ export default function Employees() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">
-                            {employee.employment_type === 'daily' ? 'Daily' : 'Monthly'}
+                            {employee.salary_type === 'daily' ? 'Daily' : 'Monthly'}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatCurrency(employee.work_rate)}</TableCell>
+                        <TableCell>{formatCurrency(employee.base_amount)}</TableCell>
                         <TableCell className="text-sm">
-                          {(employee as any).month_calculation_type === 'fixed_26' ? 'Fixed 26' : 'Calendar'}
+                          {employee.working_days_rule === 'fixed_26' ? 'Fixed 26' : 'Calendar'}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            {(employee as any).is_pf_enabled && (
+                            {employee.is_pf_enabled && (
                               <Badge variant="secondary" className="text-xs">PF</Badge>
                             )}
-                            {(employee as any).is_esi_enabled && (
+                            {employee.is_esi_enabled && (
                               <Badge variant="secondary" className="text-xs">ESI</Badge>
                             )}
-                            {(employee as any).is_tds_enabled && (
+                            {employee.is_tds_enabled && (
                               <Badge variant="secondary" className="text-xs">TDS</Badge>
                             )}
                           </div>
