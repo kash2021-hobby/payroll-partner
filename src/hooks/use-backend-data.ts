@@ -39,7 +39,7 @@ export interface PayrollData {
   employeeName: string;
   department: string;
   position: string;
-  employmentType: 'hourly' | 'daily' | 'weekly';
+  employmentType: 'hourly' | 'daily' | 'weekly' | 'monthly';
   workRate: number;
   presentDays: number;
   totalHours: number;

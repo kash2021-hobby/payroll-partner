@@ -20,6 +20,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -34,31 +36,23 @@ import { toast } from '@/hooks/use-toast';
 
 interface EmployeeFormData {
   full_name: string;
-  email: string;
-  phone: string;
-  dob: string;
-  joining_date: string;
-  employment_type: 'hourly' | 'daily' | 'weekly';
+  employment_type: 'monthly' | 'daily';
   work_rate: number;
-  position: string;
-  department: string;
-  shift: 'morning' | 'evening' | 'night' | 'custom';
-  allowed_leaves: number;
+  month_calculation_type: 'calendar' | 'fixed_26';
+  is_pf_enabled: boolean;
+  is_esi_enabled: boolean;
+  is_tds_enabled: boolean;
   status: 'active' | 'on-leave' | 'inactive';
 }
 
 const defaultFormData: EmployeeFormData = {
   full_name: '',
-  email: '',
-  phone: '',
-  dob: '',
-  joining_date: new Date().toISOString().split('T')[0],
-  employment_type: 'daily',
+  employment_type: 'monthly',
   work_rate: 0,
-  position: '',
-  department: '',
-  shift: 'morning',
-  allowed_leaves: 12,
+  month_calculation_type: 'calendar',
+  is_pf_enabled: true,
+  is_esi_enabled: false,
+  is_tds_enabled: false,
   status: 'active',
 };
 
@@ -76,9 +70,7 @@ export default function Employees() {
   const filteredEmployees = (employees || []).filter(
     (emp) =>
       emp.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.department?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.position?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.phone?.includes(searchQuery)
+      emp.department?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleOpenDialog = (employee?: BackendEmployee) => {
@@ -86,16 +78,12 @@ export default function Employees() {
       setEditingEmployee(employee);
       setFormData({
         full_name: employee.full_name,
-        email: employee.email || '',
-        phone: employee.phone || '',
-        dob: employee.dob || '',
-        joining_date: employee.joining_date,
-        employment_type: employee.employment_type,
+        employment_type: employee.employment_type === 'daily' ? 'daily' : 'monthly',
         work_rate: employee.work_rate,
-        position: employee.position || '',
-        department: employee.department || '',
-        shift: employee.shift || 'morning',
-        allowed_leaves: employee.allowed_leaves,
+        month_calculation_type: (employee as any).month_calculation_type || 'calendar',
+        is_pf_enabled: (employee as any).is_pf_enabled ?? true,
+        is_esi_enabled: (employee as any).is_esi_enabled ?? false,
+        is_tds_enabled: (employee as any).is_tds_enabled ?? false,
         status: employee.status,
       });
     } else {
@@ -108,24 +96,29 @@ export default function Employees() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.full_name || !formData.joining_date) {
+    if (!formData.full_name) {
       toast({
         title: 'Validation Error',
-        description: 'Please fill in all required fields.',
+        description: 'Please enter employee name.',
         variant: 'destructive',
       });
       return;
     }
 
     try {
+      const payload = {
+        ...formData,
+        joining_date: new Date().toISOString().split('T')[0],
+      };
+
       if (editingEmployee) {
-        await updateEmployee.mutateAsync({ id: editingEmployee.id, data: formData });
+        await updateEmployee.mutateAsync({ id: editingEmployee.id, data: payload });
         toast({
           title: 'Employee Updated',
           description: `${formData.full_name}'s profile has been updated.`,
         });
       } else {
-        await createEmployee.mutateAsync(formData);
+        await createEmployee.mutateAsync(payload);
         toast({
           title: 'Employee Added',
           description: `${formData.full_name} has been added to the system.`,
@@ -200,8 +193,8 @@ export default function Employees() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Employees</h1>
-          <p className="text-muted-foreground">Manage employee profiles and salary configuration</p>
+          <h1 className="text-2xl font-bold text-foreground">Employee Directory</h1>
+          <p className="text-muted-foreground">Add and manage staff</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -210,161 +203,138 @@ export default function Employees() {
               Add Employee
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>
                 {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
               </DialogTitle>
               <DialogDescription>
                 {editingEmployee
-                  ? 'Update employee information and salary configuration.'
-                  : 'Enter employee details and configure salary settings.'}
+                  ? 'Update employee salary configuration.'
+                  : 'Enter employee details and salary settings.'}
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Basic Information */}
-              <div className="space-y-4">
-                <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                  Basic Information
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 col-span-2">
-                    <Label htmlFor="full_name">Full Name *</Label>
-                    <Input
-                      id="full_name"
-                      value={formData.full_name}
-                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                      placeholder="John Doe"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="john@company.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="9876543210"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dob">Date of Birth</Label>
-                    <Input
-                      id="dob"
-                      type="date"
-                      value={formData.dob}
-                      onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="joining_date">Joining Date *</Label>
-                    <Input
-                      id="joining_date"
-                      type="date"
-                      value={formData.joining_date}
-                      onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="department">Department</Label>
-                    <Input
-                      id="department"
-                      value={formData.department}
-                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                      placeholder="Engineering"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="position">Position</Label>
-                    <Input
-                      id="position"
-                      value={formData.position}
-                      onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                      placeholder="Senior Developer"
-                    />
-                  </div>
-                </div>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Employee ID - Auto generated info */}
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="text-xs text-muted-foreground">Employee ID</p>
+                <p className="font-mono text-sm">
+                  {editingEmployee ? editingEmployee.id.slice(0, 8).toUpperCase() : 'Auto-generated'}
+                </p>
               </div>
 
-              {/* Salary Configuration */}
-              <div className="space-y-4">
-                <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                  Salary Configuration
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Employment Type *</Label>
-                    <Select
-                      value={formData.employment_type}
-                      onValueChange={(value: 'hourly' | 'daily' | 'weekly') =>
-                        setFormData({ ...formData, employment_type: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="hourly">Hourly</SelectItem>
-                        <SelectItem value="daily">Daily</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                      </SelectContent>
-                    </Select>
+              {/* Full Name */}
+              <div className="space-y-2">
+                <Label htmlFor="full_name">Full Name *</Label>
+                <Input
+                  id="full_name"
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                  placeholder="Enter full name"
+                  required
+                />
+              </div>
+
+              {/* Salary Type */}
+              <div className="space-y-2">
+                <Label>Salary Type</Label>
+                <Select
+                  value={formData.employment_type}
+                  onValueChange={(value: 'monthly' | 'daily') =>
+                    setFormData({ ...formData, employment_type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="daily">Daily</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Base Amount */}
+              <div className="space-y-2">
+                <Label htmlFor="work_rate">
+                  Base Amount (₹/{formData.employment_type === 'daily' ? 'day' : 'month'})
+                </Label>
+                <Input
+                  id="work_rate"
+                  type="number"
+                  value={formData.work_rate}
+                  onChange={(e) => setFormData({ ...formData, work_rate: Number(e.target.value) })}
+                  placeholder="Enter amount"
+                />
+              </div>
+
+              {/* Working Days Rule */}
+              <div className="space-y-2">
+                <Label>Working Days Rule</Label>
+                <Select
+                  value={formData.month_calculation_type}
+                  onValueChange={(value: 'calendar' | 'fixed_26') =>
+                    setFormData({ ...formData, month_calculation_type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="calendar">Calendar Days (Actual days in month)</SelectItem>
+                    <SelectItem value="fixed_26">Fixed 26 Days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Compliance Toggles */}
+              <div className="space-y-3">
+                <Label className="text-muted-foreground text-xs uppercase tracking-wide">
+                  Compliance Settings
+                </Label>
+                
+                {/* PF Applicable */}
+                <div className="flex items-center justify-between p-3 rounded-lg border">
+                  <div>
+                    <p className="font-medium text-sm">PF Applicable</p>
+                    <p className="text-xs text-muted-foreground">Provident Fund (12%)</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="work_rate">
-                      Work Rate (₹/{formData.employment_type === 'hourly' ? 'hour' : formData.employment_type === 'daily' ? 'day' : 'week'})
+                  <Switch
+                    checked={formData.is_pf_enabled}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, is_pf_enabled: checked })
+                    }
+                  />
+                </div>
+
+                {/* ESI Applicable */}
+                <div className="flex items-center justify-between p-3 rounded-lg border">
+                  <div>
+                    <p className="font-medium text-sm">ESI Applicable</p>
+                    <p className="text-xs text-muted-foreground">Employee State Insurance (0.75%)</p>
+                  </div>
+                  <Switch
+                    checked={formData.is_esi_enabled}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, is_esi_enabled: checked })
+                    }
+                  />
+                </div>
+
+                {/* TDS Applicable */}
+                <div className="flex items-center gap-3 p-3 rounded-lg border">
+                  <Checkbox
+                    id="tds"
+                    checked={formData.is_tds_enabled}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, is_tds_enabled: checked === true })
+                    }
+                  />
+                  <div>
+                    <Label htmlFor="tds" className="font-medium text-sm cursor-pointer">
+                      TDS Applicable
                     </Label>
-                    <Input
-                      id="work_rate"
-                      type="number"
-                      value={formData.work_rate}
-                      onChange={(e) =>
-                        setFormData({ ...formData, work_rate: Number(e.target.value) })
-                      }
-                      placeholder="500"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Shift</Label>
-                    <Select
-                      value={formData.shift}
-                      onValueChange={(value: 'morning' | 'evening' | 'night' | 'custom') =>
-                        setFormData({ ...formData, shift: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="morning">Morning</SelectItem>
-                        <SelectItem value="evening">Evening</SelectItem>
-                        <SelectItem value="night">Night</SelectItem>
-                        <SelectItem value="custom">Custom</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="allowed_leaves">Allowed Leaves (per year)</Label>
-                    <Input
-                      id="allowed_leaves"
-                      type="number"
-                      value={formData.allowed_leaves}
-                      onChange={(e) =>
-                        setFormData({ ...formData, allowed_leaves: Number(e.target.value) })
-                      }
-                      placeholder="12"
-                    />
+                    <p className="text-xs text-muted-foreground">Tax Deduction at Source</p>
                   </div>
                 </div>
               </div>
@@ -404,7 +374,7 @@ export default function Employees() {
                   {(createEmployee.isPending || updateEmployee.isPending) && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  {editingEmployee ? 'Update Employee' : 'Add Employee'}
+                  {editingEmployee ? 'Update' : 'Add Employee'}
                 </Button>
               </div>
             </form>
@@ -418,7 +388,7 @@ export default function Employees() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search employees by name, department, or phone..."
+              placeholder="Search employees..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -430,9 +400,9 @@ export default function Employees() {
       {/* Employee Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Employee Directory</CardTitle>
+          <CardTitle>All Employees</CardTitle>
           <CardDescription>
-            {isLoading ? 'Loading...' : `${filteredEmployees.length} of ${employees?.length || 0} employees`}
+            {isLoading ? 'Loading...' : `${filteredEmployees.length} employees`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -445,11 +415,12 @@ export default function Employees() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Employment Type</TableHead>
-                    <TableHead>Work Rate</TableHead>
-                    <TableHead>Leaves</TableHead>
+                    <TableHead>Employee ID</TableHead>
+                    <TableHead>Full Name</TableHead>
+                    <TableHead>Salary Type</TableHead>
+                    <TableHead>Base Amount</TableHead>
+                    <TableHead>Days Rule</TableHead>
+                    <TableHead>Compliance</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -457,41 +428,40 @@ export default function Employees() {
                 <TableBody>
                   {filteredEmployees.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No employees found
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredEmployees.map((employee) => (
                       <TableRow key={employee.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                              <span className="text-sm font-medium text-primary">
-                                {employee.full_name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-medium">{employee.full_name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {employee.position || 'No position'}
-                              </p>
-                            </div>
-                          </div>
+                        <TableCell className="font-mono text-xs">
+                          {employee.id.slice(0, 8).toUpperCase()}
                         </TableCell>
-                        <TableCell>{employee.department || '-'}</TableCell>
+                        <TableCell>
+                          <p className="font-medium">{employee.full_name}</p>
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">
-                            {employee.employment_type}
+                            {employee.employment_type === 'daily' ? 'Daily' : 'Monthly'}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          {formatCurrency(employee.work_rate)}/{employee.employment_type === 'hourly' ? 'hr' : employee.employment_type === 'daily' ? 'day' : 'wk'}
+                        <TableCell>{formatCurrency(employee.work_rate)}</TableCell>
+                        <TableCell className="text-sm">
+                          {(employee as any).month_calculation_type === 'fixed_26' ? 'Fixed 26' : 'Calendar'}
                         </TableCell>
                         <TableCell>
-                          <span className="text-sm">
-                            {employee.taken_leaves}/{employee.allowed_leaves}
-                          </span>
+                          <div className="flex gap-1">
+                            {(employee as any).is_pf_enabled && (
+                              <Badge variant="secondary" className="text-xs">PF</Badge>
+                            )}
+                            {(employee as any).is_esi_enabled && (
+                              <Badge variant="secondary" className="text-xs">ESI</Badge>
+                            )}
+                            {(employee as any).is_tds_enabled && (
+                              <Badge variant="secondary" className="text-xs">TDS</Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(employee.status)}</TableCell>
                         <TableCell className="text-right">
