@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useHRMS } from '@/contexts/HRMSContext';
 import { formatCurrency } from '@/lib/payroll-engine';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SalaryCalculator } from '@/components/SalaryCalculator';
 import {
   LineChart,
   Line,
@@ -92,10 +94,21 @@ export default function Reports() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Reports</h1>
-        <p className="text-muted-foreground">Analytics and insights on payroll data</p>
+        <h1 className="text-2xl font-bold text-foreground">Reports & Calculator</h1>
+        <p className="text-muted-foreground">Analytics, insights, and salary calculation tools</p>
       </div>
 
+      <Tabs defaultValue="calculator" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="calculator">Salary Calculator</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="calculator">
+          <SalaryCalculator />
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
       {/* Monthly Trend Chart */}
       <Card>
         <CardHeader>
@@ -277,6 +290,8 @@ export default function Reports() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
