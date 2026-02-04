@@ -1,6 +1,6 @@
 // API Service to connect to Hostinger MySQL backend
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://your-backend-url.com';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://const-backend-1.onrender.com';
 
 // Auth token management
 let authToken: string | null = localStorage.getItem('auth_token');
