@@ -1,7 +1,8 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useHRMS } from '@/contexts/HRMSContext';
+import { useEmployees, useAttendance } from '@/hooks/use-backend-data';
+import { BackendEmployee, BackendAttendance } from '@/lib/api-service';
 import { formatCurrency, getDaysInMonth } from '@/lib/payroll-engine';
-import { calculateCoreSalary } from '@/lib/salary-calculator';
 import { generatePayslipPDF, PayslipData } from '@/lib/payslip-generator';
 import {
   Table,
@@ -84,8 +85,6 @@ interface PayrollGridRow {
 
 export default function PayrollRun() {
   const { 
-    employees, 
-    attendanceRecords,
     payrollRecords,
     generatePayroll,
     lockPayroll,
@@ -93,6 +92,10 @@ export default function PayrollRun() {
     checkUserPermission,
     addAuditLog,
   } = useHRMS();
+  
+  // Use backend data hooks
+  const { data: backendEmployees, isLoading: empLoading } = useEmployees();
+  const { data: backendAttendance, isLoading: attLoading } = useAttendance();
   
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
@@ -103,6 +106,16 @@ export default function PayrollRun() {
   const [showLockConfirmDialog, setShowLockConfirmDialog] = useState(false);
 
   const totalDays = getDaysInMonth(selectedYear, selectedMonth);
+  const isLoading = empLoading || attLoading;
+
+  // Filter attendance for selected month/year
+  const monthlyAttendance = useMemo(() => {
+    if (!backendAttendance) return [];
+    return backendAttendance.filter((a) => {
+      const date = new Date(a.date);
+      return date.getMonth() + 1 === selectedMonth && date.getFullYear() === selectedYear;
+    });
+  }, [backendAttendance, selectedMonth, selectedYear]);
 
   /**
    * Calculate Net Payable using the formula:
@@ -123,30 +136,53 @@ export default function PayrollRun() {
    * Generate/Fetch payroll data and populate the grid
    */
   const handleGeneratePayroll = useCallback(() => {
-    const gridData: PayrollGridRow[] = employees
-      .filter(emp => emp.isActive)
-      .map(emp => {
-        // Get attendance for this employee
-        const attendance = attendanceRecords.find(
-          a => a.employeeId === emp.id && a.month === selectedMonth && a.year === selectedYear
-        );
-        
-        const employeeTotalDays = emp.monthCalculationType === 'fixed_26' ? 26 : totalDays;
-        const presentDays = attendance?.presentDays ?? employeeTotalDays;
+    if (!backendEmployees || backendEmployees.length === 0) {
+      toast({
+        title: 'No Employees',
+        description: 'No employees found in the database.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-        // Calculate salary using core calculator
-        const calculation = calculateCoreSalary(
-          emp.grossMonthlySalary,
-          employeeTotalDays,
-          presentDays,
-          emp.isPFEnabled,
-          emp.isESIEnabled
-        );
+    const gridData: PayrollGridRow[] = backendEmployees
+      .filter(emp => emp.status === 'active')
+      .map(emp => {
+        // Get attendance for this employee from backend
+        const empAttendance = monthlyAttendance.filter(a => a.employee_id === emp.id);
+        const presentDays = empAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
+        const totalHours = empAttendance.reduce((sum, a) => sum + (parseFloat(String(a.total_hours)) || 0), 0);
+        
+        const employeeTotalDays = emp.month_calculation_type === 'fixed_26' ? 26 : totalDays;
+
+        // Calculate gross salary based on employment type
+        let gross = 0;
+        switch (emp.employment_type) {
+          case 'monthly':
+            gross = (parseFloat(String(emp.work_rate)) / employeeTotalDays) * presentDays;
+            break;
+          case 'daily':
+            gross = presentDays * parseFloat(String(emp.work_rate));
+            break;
+          case 'hourly':
+            gross = totalHours * parseFloat(String(emp.work_rate));
+            break;
+          case 'weekly':
+            const weeks = presentDays / 6;
+            gross = weeks * parseFloat(String(emp.work_rate));
+            break;
+        }
+        gross = Math.round(gross * 100) / 100;
 
         // Calculate component breakdown
-        const basic = calculation.Basic;
-        const hra = Math.round(calculation.Gross * 0.20);
-        const otherAllowances = calculation.Gross - basic - hra;
+        const basic = Math.round(gross * 0.50);
+        const hra = Math.round(gross * 0.20);
+        const otherAllowances = gross - basic - hra;
+
+        // Calculate PF and ESI based on employee settings
+        const pfAmount = emp.is_pf_enabled && basic <= 15000 ? Math.round(basic * 0.12) : 0;
+        const esiAmount = emp.is_esi_enabled && gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+        const tdsWarning = gross > 50000;
 
         // Check if there's existing payroll data
         const existingPayroll = payrollRecords.find(
@@ -158,28 +194,28 @@ export default function PayrollRun() {
         const oneTimeBonus = existingPayroll?.oneTimeBonus ?? 0;
 
         // Calculate totals
-        const totalEarnings = calculation.Gross + prevMonthAdjustment + oneTimeBonus;
-        const totalDeductions = calculation.PF_Amount + calculation.ESI_Amount + manualTDS;
+        const totalEarnings = gross + prevMonthAdjustment + oneTimeBonus;
+        const totalDeductions = pfAmount + esiAmount + manualTDS;
         const netPayable = totalEarnings - totalDeductions;
 
         return {
           id: existingPayroll?.id ?? crypto.randomUUID(),
           employeeId: emp.id,
-          employeeCode: emp.employeeId,
-          employeeName: `${emp.firstName} ${emp.lastName}`,
-          department: emp.department,
-          designation: emp.designation,
-          bankAccount: emp.bankAccountNumber,
-          bankName: emp.bankName,
+          employeeCode: emp.id.slice(0, 8).toUpperCase(),
+          employeeName: emp.full_name,
+          department: emp.department || 'N/A',
+          designation: emp.position || 'N/A',
+          bankAccount: emp.bank_account_number || 'N/A',
+          bankName: emp.bank_name || 'N/A',
           presentDays,
           totalDays: employeeTotalDays,
-          gross: calculation.Gross,
+          gross,
           basic,
           hra,
           otherAllowances,
-          pfAmount: calculation.PF_Amount,
-          esiAmount: calculation.ESI_Amount,
-          tdsWarning: calculation.TDS_Warning,
+          pfAmount,
+          esiAmount,
+          tdsWarning,
           manualTDS,
           prevMonthAdjustment,
           oneTimeBonus,
@@ -201,7 +237,7 @@ export default function PayrollRun() {
       title: 'Payroll Generated',
       description: `Payroll for ${months[selectedMonth - 1]} ${selectedYear} has been calculated.`,
     });
-  }, [employees, attendanceRecords, payrollRecords, selectedMonth, selectedYear, totalDays, generatePayroll]);
+  }, [backendEmployees, monthlyAttendance, payrollRecords, selectedMonth, selectedYear, totalDays, generatePayroll]);
 
   /**
    * Handle Manual TDS change with instant recalculation
