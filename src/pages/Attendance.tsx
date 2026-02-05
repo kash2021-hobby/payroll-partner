@@ -81,7 +81,7 @@ export default function Attendance() {
         lateDays: empRecords.filter((r) => r.status === 'late').length,
         absentDays: empRecords.filter((r) => r.status === 'absent').length,
         leaveDays: empRecords.filter((r) => r.status === 'on-leave').length,
-        totalHours: empRecords.reduce((sum, r) => sum + (r.total_hours || 0), 0),
+        totalHours: empRecords.reduce((sum, r) => sum + (Number(r.total_hours) || 0), 0),
         records: empRecords,
       };
     });
