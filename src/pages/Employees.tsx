@@ -40,7 +40,7 @@ interface EmployeeFormData {
   working_days_rule: 'calendar' | 'fixed_26';
   is_pf_enabled: boolean;
   is_esi_enabled: boolean;
-  is_td_enabled: boolean;
+  is_tds_enabled: boolean;
   status: 'active' | 'on-leave' | 'inactive';
 }
 
@@ -51,7 +51,7 @@ const defaultFormData: EmployeeFormData = {
   working_days_rule: 'calendar',
   is_pf_enabled: true,
   is_esi_enabled: false,
-  is_td_enabled: false,
+  is_tds_enabled: false,
   status: 'active',
 };
 
@@ -82,7 +82,7 @@ export default function Employees() {
         working_days_rule: employee.working_days_rule,
         is_pf_enabled: employee.is_pf_enabled,
         is_esi_enabled: employee.is_esi_enabled,
-        is_td_enabled: employee.is_td_enabled,
+        is_tds_enabled: employee.is_tds_enabled,
         status: employee.status,
       });
     } else {
@@ -324,9 +324,9 @@ export default function Employees() {
                 <div className="flex items-center gap-3 p-3 rounded-lg border">
                   <Checkbox
                     id="tds"
-                    checked={formData.is_td_enabled}
+                    checked={formData.is_tds_enabled}
                     onCheckedChange={(checked) =>
-                      setFormData({ ...formData, is_td_enabled: checked === true })
+                      setFormData({ ...formData, is_tds_enabled: checked === true })
                     }
                   />
                   <div>
@@ -457,7 +457,7 @@ export default function Employees() {
                             {employee.is_esi_enabled && (
                               <Badge variant="secondary" className="text-xs">ESI</Badge>
                             )}
-                            {employee.is_td_enabled && (
+                            {employee.is_tds_enabled && (
                               <Badge variant="secondary" className="text-xs">TDS</Badge>
                             )}
                           </div>

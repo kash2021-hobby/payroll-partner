@@ -9,7 +9,7 @@ export interface MockEmployee {
   working_days_rule: 'calendar' | 'fixed_26';
   is_pf_enabled: boolean;
   is_esi_enabled: boolean;
-  is_td_enabled: boolean;
+  is_tds_enabled: boolean;
   department: string | null;
   position: string | null;
   status: 'active' | 'on-leave' | 'inactive';
@@ -46,7 +46,7 @@ export const mockEmployees: MockEmployee[] = [
     working_days_rule: 'fixed_26',
     is_pf_enabled: true,
     is_esi_enabled: false,
-    is_td_enabled: true,
+    is_tds_enabled: true,
     department: 'Engineering',
     position: 'Senior Developer',
     status: 'active',
@@ -62,7 +62,7 @@ export const mockEmployees: MockEmployee[] = [
     working_days_rule: 'calendar',
     is_pf_enabled: true,
     is_esi_enabled: true,
-    is_td_enabled: false,
+    is_tds_enabled: false,
     department: 'HR',
     position: 'HR Manager',
     status: 'active',
@@ -78,7 +78,7 @@ export const mockEmployees: MockEmployee[] = [
     working_days_rule: 'calendar',
     is_pf_enabled: false,
     is_esi_enabled: true,
-    is_td_enabled: false,
+    is_tds_enabled: false,
     department: 'Operations',
     position: 'Site Supervisor',
     status: 'active',
@@ -94,7 +94,7 @@ export const mockEmployees: MockEmployee[] = [
     working_days_rule: 'fixed_26',
     is_pf_enabled: true,
     is_esi_enabled: true,
-    is_td_enabled: false,
+    is_tds_enabled: false,
     department: 'Accounts',
     position: 'Accountant',
     status: 'active',
@@ -110,7 +110,7 @@ export const mockEmployees: MockEmployee[] = [
     working_days_rule: 'calendar',
     is_pf_enabled: false,
     is_esi_enabled: false,
-    is_td_enabled: false,
+    is_tds_enabled: false,
     department: 'Engineering',
     position: 'Technician',
     status: 'on-leave',
