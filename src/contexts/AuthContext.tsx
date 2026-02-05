@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { clearAuthToken } from '@/lib/api-service';
+import { setAuthToken, clearAuthToken } from '@/lib/api-service';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -11,11 +11,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!localStorage.getItem('auth_token');
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      setAuthToken(token); // Sync token with api-service on init
+    }
+    return !!token;
   });
 
   const login = (token: string) => {
-    localStorage.setItem('auth_token', token);
+    setAuthToken(token); // This updates both localStorage and api-service
     setIsAuthenticated(true);
   };
 
