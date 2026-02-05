@@ -69,10 +69,10 @@ export interface BackendEmployee {
   phone: string | null;
   allowed_leaves: number;
   taken_leaves: number;
-  month_calculation_type?: 'calendar' | 'fixed_26';
+  working_days_rule?: 'calendar' | 'fixed_26';
   is_pf_enabled?: boolean;
   is_esi_enabled?: boolean;
-  is_tds_enabled?: boolean;
+  is_td_enabled?: boolean;
   bank_name?: string | null;
   bank_account_number?: string | null;
   ifsc_code?: string | null;
@@ -253,7 +253,7 @@ export const calculateMonthlySalary = (
   const totalHours = empAttendance.reduce((sum, a) => sum + (a.total_hours || 0), 0);
 
   let grossSalary = 0;
-  const totalDaysInMonth = employee.month_calculation_type === 'fixed_26' ? 26 : 30;
+  const totalDaysInMonth = employee.working_days_rule === 'fixed_26' ? 26 : 30;
 
   switch (employee.employment_type) {
     case 'monthly':
