@@ -35,9 +35,9 @@ import { toast } from '@/hooks/use-toast';
 
 interface EmployeeFormData {
   full_name: string;
-  salary_type: 'monthly' | 'daily';
-  base_amount: number;
-  working_days_rule: 'calendar' | 'fixed_26';
+  employment_type: 'hourly' | 'daily' | 'weekly' | 'monthly';
+  work_rate: number;
+  month_calculation_type: 'calendar' | 'fixed_26';
   is_pf_enabled: boolean;
   is_esi_enabled: boolean;
   is_tds_enabled: boolean;
@@ -46,9 +46,9 @@ interface EmployeeFormData {
 
 const defaultFormData: EmployeeFormData = {
   full_name: '',
-  salary_type: 'monthly',
-  base_amount: 0,
-  working_days_rule: 'calendar',
+  employment_type: 'monthly',
+  work_rate: 0,
+  month_calculation_type: 'calendar',
   is_pf_enabled: true,
   is_esi_enabled: false,
   is_tds_enabled: false,
@@ -77,12 +77,12 @@ export default function Employees() {
       setEditingEmployee(employee);
       setFormData({
         full_name: employee.full_name,
-        salary_type: employee.salary_type,
-        base_amount: employee.base_amount,
-        working_days_rule: employee.working_days_rule,
-        is_pf_enabled: employee.is_pf_enabled,
-        is_esi_enabled: employee.is_esi_enabled,
-        is_tds_enabled: employee.is_tds_enabled,
+        employment_type: employee.employment_type,
+        work_rate: employee.work_rate,
+        month_calculation_type: employee.month_calculation_type || 'calendar',
+        is_pf_enabled: employee.is_pf_enabled ?? false,
+        is_esi_enabled: employee.is_esi_enabled ?? false,
+        is_tds_enabled: employee.is_tds_enabled ?? false,
         status: employee.status,
       });
     } else {
@@ -234,13 +234,13 @@ export default function Employees() {
                 />
               </div>
 
-              {/* Salary Type */}
+              {/* Employment Type */}
               <div className="space-y-2">
-                <Label>Salary Type</Label>
+                <Label>Employment Type</Label>
                 <Select
-                  value={formData.salary_type}
-                  onValueChange={(value: 'monthly' | 'daily') =>
-                    setFormData({ ...formData, salary_type: value })
+                  value={formData.employment_type}
+                  onValueChange={(value: 'hourly' | 'daily' | 'weekly' | 'monthly') =>
+                    setFormData({ ...formData, employment_type: value })
                   }
                 >
                   <SelectTrigger>
@@ -248,32 +248,34 @@ export default function Employees() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="hourly">Hourly</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Base Amount */}
+              {/* Work Rate */}
               <div className="space-y-2">
-                <Label htmlFor="base_amount">
-                  Base Amount (₹/{formData.salary_type === 'daily' ? 'day' : 'month'})
+                <Label htmlFor="work_rate">
+                  Work Rate (₹/{formData.employment_type === 'hourly' ? 'hour' : formData.employment_type === 'daily' ? 'day' : formData.employment_type === 'weekly' ? 'week' : 'month'})
                 </Label>
                 <Input
-                  id="base_amount"
+                  id="work_rate"
                   type="number"
-                  value={formData.base_amount}
-                  onChange={(e) => setFormData({ ...formData, base_amount: Number(e.target.value) })}
+                  value={formData.work_rate}
+                  onChange={(e) => setFormData({ ...formData, work_rate: Number(e.target.value) })}
                   placeholder="Enter amount"
                 />
               </div>
 
-              {/* Working Days Rule */}
+              {/* Month Calculation Type */}
               <div className="space-y-2">
-                <Label>Working Days Rule</Label>
+                <Label>Month Calculation Type</Label>
                 <Select
-                  value={formData.working_days_rule}
+                  value={formData.month_calculation_type}
                   onValueChange={(value: 'calendar' | 'fixed_26') =>
-                    setFormData({ ...formData, working_days_rule: value })
+                    setFormData({ ...formData, month_calculation_type: value })
                   }
                 >
                   <SelectTrigger>
@@ -442,12 +444,12 @@ export default function Employees() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">
-                            {employee.salary_type === 'daily' ? 'Daily' : 'Monthly'}
+                            {employee.employment_type}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatCurrency(employee.base_amount)}</TableCell>
+                        <TableCell>{formatCurrency(employee.work_rate)}</TableCell>
                         <TableCell className="text-sm">
-                          {employee.working_days_rule === 'fixed_26' ? 'Fixed 26' : 'Calendar'}
+                          {employee.month_calculation_type === 'fixed_26' ? 'Fixed 26' : 'Calendar'}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
