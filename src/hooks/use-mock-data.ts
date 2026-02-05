@@ -106,7 +106,7 @@ export function usePayrollData(month: number, year: number) {
       // Calculate deductions based on employee settings
       const pfDeduction = emp.is_pf_enabled ? Math.round(grossSalary * 0.12) : 0;
       const esiDeduction = emp.is_esi_enabled && grossSalary <= 21000 ? Math.round(grossSalary * 0.0075) : 0;
-      const tdsDeduction = emp.is_td_enabled ? Math.round(grossSalary * 0.1) : 0; // 10% TDS placeholder
+      const tdsDeduction = emp.is_tds_enabled ? Math.round(grossSalary * 0.1) : 0; // 10% TDS placeholder
 
       return {
         employeeId: emp.id,
@@ -125,7 +125,7 @@ export function usePayrollData(month: number, year: number) {
         netPayable: grossSalary - pfDeduction - esiDeduction - tdsDeduction,
         isPfEnabled: emp.is_pf_enabled,
         isEsiEnabled: emp.is_esi_enabled,
-        isTdsEnabled: emp.is_td_enabled,
+        isTdsEnabled: emp.is_tds_enabled,
       };
     });
 
@@ -153,7 +153,7 @@ export function useCreateEmployee() {
         working_days_rule: data.working_days_rule || 'calendar',
         is_pf_enabled: data.is_pf_enabled || false,
         is_esi_enabled: data.is_esi_enabled || false,
-        is_td_enabled: data.is_td_enabled || false,
+        is_tds_enabled: data.is_tds_enabled || false,
         department: data.department || null,
         position: data.position || null,
         status: 'active',
