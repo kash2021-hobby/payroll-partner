@@ -90,6 +90,7 @@ export interface GlobalSettings {
   tdsThreshold: number;
   tdsPercentage: number;
   defaultMonthCalculationType: MonthCalculationType;
+  companyTaxPercentage: number;
 }
 
 export interface User {

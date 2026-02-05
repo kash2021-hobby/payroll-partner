@@ -24,6 +24,7 @@ export default function Settings() {
   const [esiPercentage, setEsiPercentage] = useState(globalSettings.esiPercentage);
   const [tdsThreshold, setTdsThreshold] = useState(globalSettings.tdsThreshold);
   const [tdsPercentage, setTdsPercentage] = useState(globalSettings.tdsPercentage);
+  const [companyTaxPercentage, setCompanyTaxPercentage] = useState(globalSettings.companyTaxPercentage);
 
   // Use new RBAC permission check
   const settingsPermission = checkUserPermission('settings:edit');
@@ -44,6 +45,7 @@ export default function Settings() {
       esiPercentage,
       tdsThreshold,
       tdsPercentage,
+      companyTaxPercentage,
     });
 
     toast({
@@ -201,6 +203,21 @@ export default function Settings() {
                 Applied when salary exceeds TDS threshold
               </p>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="companyTax">Company Tax (%)</Label>
+              <Input
+                id="companyTax"
+                type="number"
+                step="0.01"
+                value={companyTaxPercentage}
+                onChange={(e) => setCompanyTaxPercentage(Number(e.target.value))}
+                disabled={!canEditSettings}
+              />
+              <p className="text-xs text-muted-foreground">
+                Company-wide tax percentage applied to payroll
+              </p>
+            </div>
           </div>
 
           <div className="flex justify-end pt-4 border-t">
@@ -252,6 +269,12 @@ export default function Settings() {
               <strong>TDS Deduction:</strong>
               <p className="text-muted-foreground mt-1">
                 {tdsPercentage}% of Gross Salary (if Gross &gt; ₹{tdsThreshold.toLocaleString()})
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-muted/50">
+              <strong>Company Tax:</strong>
+              <p className="text-muted-foreground mt-1">
+                {companyTaxPercentage}% applied as company-wide tax
               </p>
             </div>
           </div>
