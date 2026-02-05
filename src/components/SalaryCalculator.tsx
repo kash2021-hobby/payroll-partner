@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useHRMS } from '@/contexts/HRMSContext';
+import { useEmployees, useAttendance } from '@/hooks/use-backend-data';
+import { BackendEmployee, calculateMonthlySalary } from '@/lib/api-service';
 import { calculateSalary, calculateCoreSalary, getCalendarDays } from '@/lib/salary-calculator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Calculator, CheckCircle2, Code } from 'lucide-react';
+import { AlertTriangle, Calculator, CheckCircle2, Code, Loader2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/payroll-engine';
 
 const months = [
@@ -22,42 +23,114 @@ const months = [
 ];
 
 export function SalaryCalculator() {
-  const { employees } = useHRMS();
+  const { data: backendEmployees, isLoading: empLoading } = useEmployees();
+  const { data: attendance, isLoading: attLoading } = useAttendance();
   const currentDate = new Date();
   
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [presentDays, setPresentDays] = useState<number>(0);
-  const [calculationResult, setCalculationResult] = useState<ReturnType<typeof calculateSalary> | null>(null);
-  const [coreResult, setCoreResult] = useState<ReturnType<typeof calculateCoreSalary> | null>(null);
+  const [calculationResult, setCalculationResult] = useState<any>(null);
+  const [coreResult, setCoreResult] = useState<any>(null);
 
+  const employees = backendEmployees || [];
   const selectedEmployee = employees.find(e => e.id === selectedEmployeeId);
-  const calendarDays = selectedEmployee?.monthCalculationType === 'fixed_26' 
+  
+  const calendarDays = selectedEmployee?.month_calculation_type === 'fixed_26' 
     ? 26 
     : getCalendarDays(selectedYear, selectedMonth);
+
+  // Filter attendance for the selected month/year
+  const monthlyAttendance = (attendance || []).filter((a) => {
+    const date = new Date(a.date);
+    return date.getMonth() + 1 === selectedMonth && date.getFullYear() === selectedYear;
+  });
 
   const handleCalculate = () => {
     if (!selectedEmployee) return;
 
-    // Full calculation
-    const fullResult = calculateSalary({
-      employeeId: selectedEmployee.employeeId,
+    // Calculate based on employment type
+    const workRate = Number(selectedEmployee.work_rate) || 0;
+    const monthCalculationType = selectedEmployee.month_calculation_type || 'calendar';
+    const totalDaysInMonth = monthCalculationType === 'fixed_26' ? 26 : calendarDays;
+    
+    let grossSalary = 0;
+    
+    switch (selectedEmployee.employment_type) {
+      case 'monthly':
+        grossSalary = (workRate / totalDaysInMonth) * presentDays;
+        break;
+      case 'daily':
+        grossSalary = presentDays * workRate;
+        break;
+      case 'weekly':
+        const weeks = presentDays / 6;
+        grossSalary = weeks * workRate;
+        break;
+      case 'hourly':
+        // For hourly, use total hours from attendance
+        const empAttendance = monthlyAttendance.filter(a => a.employee_id === selectedEmployee.id);
+        const totalHours = empAttendance.reduce((sum, a) => sum + (Number(a.total_hours) || 0), 0);
+        grossSalary = totalHours * workRate;
+        break;
+      default:
+        grossSalary = (workRate / totalDaysInMonth) * presentDays;
+    }
+
+    // Calculate salary components
+    const proRataSalary = Math.round(grossSalary);
+    const basic = Math.round(proRataSalary * 0.5);
+    const hra = Math.round(proRataSalary * 0.2);
+    const otherAllowances = Math.round(proRataSalary * 0.3);
+    
+    // Deductions
+    const isPFEnabled = selectedEmployee.is_pf_enabled || false;
+    const isESIEnabled = selectedEmployee.is_esi_enabled || false;
+    const isTDSEnabled = selectedEmployee.is_tds_enabled || false;
+    
+    const pfEligible = isPFEnabled && basic <= 15000;
+    const pfAmount = pfEligible ? Math.round(basic * 0.12) : 0;
+    
+    const esiEligible = isESIEnabled && proRataSalary <= 21000;
+    const esiAmount = esiEligible ? Math.round(proRataSalary * 0.0075) : 0;
+    
+    const tdsWarning = proRataSalary > 50000;
+    
+    const totalDeductions = pfAmount + esiAmount;
+    const netPayable = proRataSalary - totalDeductions;
+    
+    // Full calculation result
+    const fullResult = {
+      employeeId: selectedEmployee.id,
+      employeeName: selectedEmployee.full_name,
       month: selectedMonth,
       year: selectedYear,
+      calendarDays,
       presentDays,
-      employee: selectedEmployee,
-    });
+      Gross: proRataSalary,
+      ProRataSalary: proRataSalary,
+      Basic: basic,
+      HRA: hra,
+      OtherAllowances: otherAllowances,
+      PF_Eligible: pfEligible,
+      PF_Amount: pfAmount,
+      ESI_Eligible: esiEligible,
+      ESI_Amount: esiAmount,
+      TDS_Warning: tdsWarning,
+      TotalDeductions: totalDeductions,
+      NetPayable: netPayable,
+    };
     setCalculationResult(fullResult);
 
     // Core calculation (simplified output)
-    const core = calculateCoreSalary(
-      selectedEmployee.grossMonthlySalary,
-      calendarDays,
-      presentDays,
-      selectedEmployee.isPFEnabled,
-      selectedEmployee.isESIEnabled
-    );
+    const core = {
+      Gross: proRataSalary,
+      Basic: basic,
+      PF_Amount: pfAmount,
+      ESI_Amount: esiAmount,
+      TDS_Warning: tdsWarning,
+    };
     setCoreResult(core);
   };
 
@@ -65,14 +138,21 @@ export function SalaryCalculator() {
     setSelectedEmployeeId(employeeId);
     const emp = employees.find(e => e.id === employeeId);
     if (emp) {
-      const days = emp.monthCalculationType === 'fixed_26' ? 26 : getCalendarDays(selectedYear, selectedMonth);
-      setPresentDays(days);
+      const days = emp.month_calculation_type === 'fixed_26' ? 26 : getCalendarDays(selectedYear, selectedMonth);
+      
+      // Calculate present days from attendance
+      const empAttendance = monthlyAttendance.filter(a => a.employee_id === employeeId);
+      const actualPresentDays = empAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
+      
+      setPresentDays(actualPresentDays || days);
     }
     setCalculationResult(null);
     setCoreResult(null);
   };
 
   const years = Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i);
+
+  const isLoading = empLoading || attLoading;
 
   return (
     <div className="space-y-6">
@@ -84,21 +164,28 @@ export function SalaryCalculator() {
             <CardTitle>Salary Calculator</CardTitle>
           </div>
           <CardDescription>
-            Calculate salary using Pro-Rata formula with PF/ESI deductions
+            Calculate salary for employees from database using Pro-Rata formula
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {isLoading && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading employees...
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label>Employee ID</Label>
-              <Select value={selectedEmployeeId} onValueChange={handleEmployeeChange}>
+              <Label>Employee</Label>
+              <Select value={selectedEmployeeId} onValueChange={handleEmployeeChange} disabled={isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select employee" />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.filter(e => e.isActive).map(emp => (
+                  {employees.filter(e => e.status === 'active').map(emp => (
                     <SelectItem key={emp.id} value={emp.id}>
-                      {emp.employeeId} - {emp.firstName} {emp.lastName}
+                      {emp.full_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -167,23 +254,29 @@ export function SalaryCalculator() {
           {selectedEmployee && (
             <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-muted/50">
               <Badge variant="outline">
-                Gross: {formatCurrency(selectedEmployee.grossMonthlySalary)}
-              </Badge>
-              <Badge variant={selectedEmployee.isPFEnabled ? 'default' : 'secondary'}>
-                PF: {selectedEmployee.isPFEnabled ? 'ON' : 'OFF'}
-              </Badge>
-              <Badge variant={selectedEmployee.isESIEnabled ? 'default' : 'secondary'}>
-                ESI: {selectedEmployee.isESIEnabled ? 'ON' : 'OFF'}
+                Rate: {formatCurrency(Number(selectedEmployee.work_rate))}
+                {selectedEmployee.employment_type === 'monthly' ? '/mo' : 
+                 selectedEmployee.employment_type === 'daily' ? '/day' :
+                 selectedEmployee.employment_type === 'hourly' ? '/hr' : '/wk'}
               </Badge>
               <Badge variant="outline">
-                {selectedEmployee.monthCalculationType === 'fixed_26' ? 'Fixed 26 Days' : 'Calendar Days'}
+                Type: {selectedEmployee.employment_type}
+              </Badge>
+              <Badge variant={selectedEmployee.is_pf_enabled ? 'default' : 'secondary'}>
+                PF: {selectedEmployee.is_pf_enabled ? 'ON' : 'OFF'}
+              </Badge>
+              <Badge variant={selectedEmployee.is_esi_enabled ? 'default' : 'secondary'}>
+                ESI: {selectedEmployee.is_esi_enabled ? 'ON' : 'OFF'}
+              </Badge>
+              <Badge variant="outline">
+                {selectedEmployee.month_calculation_type === 'fixed_26' ? 'Fixed 26 Days' : 'Calendar Days'}
               </Badge>
             </div>
           )}
 
           <Button 
             onClick={handleCalculate} 
-            disabled={!selectedEmployee}
+            disabled={!selectedEmployee || isLoading}
             className="w-full md:w-auto gap-2"
           >
             <Calculator className="h-4 w-4" />
