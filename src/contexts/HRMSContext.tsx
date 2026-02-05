@@ -59,6 +59,7 @@ const defaultSettings: GlobalSettings = {
   tdsThreshold: 50000,
   tdsPercentage: 10,
   defaultMonthCalculationType: 'calendar',
+  companyTaxPercentage: 0,
 };
 
 const defaultUser: User = {
