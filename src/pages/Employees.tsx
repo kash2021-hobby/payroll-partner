@@ -455,14 +455,17 @@ export default function Employees() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            {employee.is_pf_enabled && (
+                            {employee.is_pf_enabled ? (
                               <Badge variant="secondary" className="text-xs">PF</Badge>
-                            )}
-                            {employee.is_esi_enabled && (
+                            ) : null}
+                            {employee.is_esi_enabled ? (
                               <Badge variant="secondary" className="text-xs">ESI</Badge>
-                            )}
-                            {employee.is_tds_enabled && (
+                            ) : null}
+                            {employee.is_tds_enabled ? (
                               <Badge variant="secondary" className="text-xs">TDS</Badge>
+                            ) : null}
+                            {!employee.is_pf_enabled && !employee.is_esi_enabled && !employee.is_tds_enabled && (
+                              <span className="text-muted-foreground text-xs">None</span>
                             )}
                           </div>
                         </TableCell>
