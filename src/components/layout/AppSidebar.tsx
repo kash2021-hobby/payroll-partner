@@ -22,6 +22,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { useHRMS } from '@/contexts/HRMSContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -45,6 +46,13 @@ export function AppSidebar() {
   const { currentUser } = useHRMS();
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -80,6 +88,7 @@ export function AppSidebar() {
                       end={item.url === '/'}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      onClick={handleNavClick}
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -104,6 +113,7 @@ export function AppSidebar() {
                       to={item.url}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                      onClick={handleNavClick}
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
