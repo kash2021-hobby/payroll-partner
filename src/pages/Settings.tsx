@@ -66,29 +66,29 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground">Configure global payroll parameters and user roles</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground">Configure global payroll parameters and user roles</p>
       </div>
 
       {/* Role Switcher (Demo) */}
       <Card>
-        <CardHeader>
+        <CardHeader className="p-4 sm:p-6">
           <div className="flex items-center gap-2">
-            <User className="h-5 w-5 text-primary" />
-            <CardTitle>User Role (Demo)</CardTitle>
+            <User className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <CardTitle className="text-base sm:text-lg">User Role (Demo)</CardTitle>
           </div>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             Switch between roles to test different permission levels
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4">
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="space-y-2 flex-1">
-              <Label>Current Role</Label>
+              <Label className="text-xs sm:text-sm">Current Role</Label>
               <Select value={currentUser.role} onValueChange={(v: UserRole) => handleRoleChange(v)}>
-                <SelectTrigger className="w-[250px]">
+                <SelectTrigger className="w-full sm:w-[250px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -107,7 +107,7 @@ export default function Settings() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="pt-6">
+            <div className="sm:pt-6">
               <Badge variant={getRoleBadgeVariant(currentUser.role)}>
                 {currentUser.role === 'super_admin' 
                   ? 'Full Access' 
@@ -115,14 +115,14 @@ export default function Settings() {
               </Badge>
             </div>
           </div>
-          <div className="mt-4 p-4 rounded-lg bg-muted/50">
-            <p className="text-sm text-muted-foreground">
+          <div className="mt-4 p-3 sm:p-4 rounded-lg bg-muted/50 space-y-2">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               <strong className="flex items-center gap-1">
                 <Unlock className="h-3 w-3" /> Super Admin:
               </strong> 
               Can edit data, lock payroll, and modify global settings.
             </p>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               <strong className="flex items-center gap-1">
                 <Lock className="h-3 w-3" /> Payroll Operator:
               </strong> 
@@ -134,19 +134,19 @@ export default function Settings() {
 
       {/* Global Deduction Settings */}
       <Card>
-        <CardHeader>
+        <CardHeader className="p-4 sm:p-6">
           <div className="flex items-center gap-2">
-            <Percent className="h-5 w-5 text-primary" />
-            <CardTitle>Deduction Percentages</CardTitle>
+            <Percent className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <CardTitle className="text-base sm:text-lg">Deduction Percentages</CardTitle>
           </div>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             Configure PF, ESI, and TDS calculation parameters
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardContent className="p-4 sm:p-6 pt-0 space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div className="space-y-2">
-              <Label htmlFor="pf">PF Percentage (%)</Label>
+              <Label htmlFor="pf" className="text-xs sm:text-sm">PF Percentage (%)</Label>
               <Input
                 id="pf"
                 type="number"
@@ -155,13 +155,13 @@ export default function Settings() {
                 onChange={(e) => setPfPercentage(Number(e.target.value))}
                 disabled={!canEditSettings}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Applied on basic salary (50% of gross), capped at ₹15,000 basic
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="esi">ESI Percentage (%)</Label>
+              <Label htmlFor="esi" className="text-xs sm:text-sm">ESI Percentage (%)</Label>
               <Input
                 id="esi"
                 type="number"
@@ -170,13 +170,13 @@ export default function Settings() {
                 onChange={(e) => setEsiPercentage(Number(e.target.value))}
                 disabled={!canEditSettings}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Applied only if gross salary ≤ ₹21,000
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tdsThreshold">TDS Threshold (₹)</Label>
+              <Label htmlFor="tdsThreshold" className="text-xs sm:text-sm">TDS Threshold (₹)</Label>
               <Input
                 id="tdsThreshold"
                 type="number"
@@ -184,13 +184,13 @@ export default function Settings() {
                 onChange={(e) => setTdsThreshold(Number(e.target.value))}
                 disabled={!canEditSettings}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Monthly salary above this triggers TDS flag
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tdsPercentage">TDS Percentage (%)</Label>
+              <Label htmlFor="tdsPercentage" className="text-xs sm:text-sm">TDS Percentage (%)</Label>
               <Input
                 id="tdsPercentage"
                 type="number"
@@ -199,13 +199,13 @@ export default function Settings() {
                 onChange={(e) => setTdsPercentage(Number(e.target.value))}
                 disabled={!canEditSettings}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Applied when salary exceeds TDS threshold
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="companyTax">Company Tax (%)</Label>
+            <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+              <Label htmlFor="companyTax" className="text-xs sm:text-sm">Company Tax (%)</Label>
               <Input
                 id="companyTax"
                 type="number"
@@ -214,7 +214,7 @@ export default function Settings() {
                 onChange={(e) => setCompanyTaxPercentage(Number(e.target.value))}
                 disabled={!canEditSettings}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 Company-wide tax percentage applied to payroll
               </p>
             </div>
@@ -224,7 +224,7 @@ export default function Settings() {
             <Button 
               onClick={handleSave} 
               disabled={!canEditSettings}
-              className="gap-2"
+              className="gap-2 w-full sm:w-auto"
             >
               <Save className="h-4 w-4" />
               Save Settings
@@ -232,7 +232,7 @@ export default function Settings() {
           </div>
 
           {!canEditSettings && (
-            <div className="p-4 rounded-lg bg-warning/10 text-warning text-sm">
+            <div className="p-3 sm:p-4 rounded-lg bg-warning/10 text-warning text-xs sm:text-sm">
               You need Super Admin privileges to modify these settings.
             </div>
           )}
@@ -241,37 +241,37 @@ export default function Settings() {
 
       {/* Info Card */}
       <Card>
-        <CardHeader>
-          <CardTitle>Calculation Reference</CardTitle>
-          <CardDescription>How deductions are calculated</CardDescription>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Calculation Reference</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">How deductions are calculated</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4 text-sm">
-            <div className="p-3 rounded-lg bg-muted/50">
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <div className="space-y-3 sm:space-y-4 text-xs sm:text-sm">
+            <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
               <strong>Pro-Rata Salary:</strong>
               <p className="text-muted-foreground mt-1">
                 (Gross Monthly Salary ÷ Days in Month) × Present Days
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-muted/50">
+            <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
               <strong>PF Deduction:</strong>
               <p className="text-muted-foreground mt-1">
                 {pfPercentage}% of Basic Salary (Basic = 50% of Pro-Rata, max ₹15,000)
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-muted/50">
+            <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
               <strong>ESI Deduction:</strong>
               <p className="text-muted-foreground mt-1">
                 {esiPercentage}% of Pro-Rata Salary (only if Pro-Rata ≤ ₹21,000)
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-muted/50">
+            <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
               <strong>TDS Deduction:</strong>
               <p className="text-muted-foreground mt-1">
                 {tdsPercentage}% of Gross Salary (if Gross &gt; ₹{tdsThreshold.toLocaleString()})
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-muted/50">
+            <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
               <strong>Company Tax:</strong>
               <p className="text-muted-foreground mt-1">
                 {companyTaxPercentage}% applied as company-wide tax

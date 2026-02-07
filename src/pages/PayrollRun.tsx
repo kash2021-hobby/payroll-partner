@@ -507,39 +507,44 @@ export default function PayrollRun() {
   const hasUnlockedRows = payrollGrid.some(r => !r.isLocked);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Payroll Run</h1>
-          <p className="text-muted-foreground">Generate, adjust, and finalize monthly payroll</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Payroll Run</h1>
+          <p className="text-sm text-muted-foreground">Generate, adjust, and finalize monthly payroll</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <Button 
             variant="outline" 
             onClick={handleGeneratePayroll}
-            className="gap-2"
+            className="gap-2 text-xs sm:text-sm flex-1 sm:flex-none"
+            size="sm"
           >
             <Calculator className="h-4 w-4" />
-            {isGenerated ? 'Regenerate' : 'Generate'} Payroll
+            <span className="hidden xs:inline">{isGenerated ? 'Regenerate' : 'Generate'}</span>
+            <span className="xs:hidden">{isGenerated ? 'Regen' : 'Gen'}</span>
           </Button>
           {isGenerated && !isMonthLocked && (
             <>
               <Button 
                 variant="outline" 
                 onClick={handleRecalculateAll}
-                className="gap-2"
+                className="gap-2 text-xs sm:text-sm"
+                size="sm"
               >
                 <RefreshCw className="h-4 w-4" />
-                Recalculate
+                <span className="hidden sm:inline">Recalculate</span>
               </Button>
               {hasPermission('lock') && hasUnlockedRows && (
                 <Button 
                   onClick={() => setShowLockConfirmDialog(true)} 
                   variant="default"
-                  className="gap-2"
+                  className="gap-2 text-xs sm:text-sm"
+                  size="sm"
                 >
                   <Lock className="h-4 w-4" />
-                  Finalize & Lock
+                  <span className="hidden sm:inline">Finalize & Lock</span>
+                  <span className="sm:hidden">Lock</span>
                 </Button>
               )}
             </>
@@ -548,10 +553,11 @@ export default function PayrollRun() {
             <Button 
               variant="outline" 
               onClick={handleGenerateAllPayslips}
-              className="gap-2"
+              className="gap-2 text-xs sm:text-sm"
+              size="sm"
             >
               <Download className="h-4 w-4" />
-              Download All Payslips
+              <span className="hidden sm:inline">Download All</span>
             </Button>
           )}
         </div>
@@ -559,12 +565,12 @@ export default function PayrollRun() {
 
       {/* Locked Status Banner */}
       {isMonthLocked && (
-        <div className="bg-success/10 border border-success/20 rounded-lg p-4 flex items-center gap-3">
-          <ShieldCheck className="h-6 w-6 text-success" />
+        <div className="bg-success/10 border border-success/20 rounded-lg p-3 sm:p-4 flex items-center gap-3">
+          <ShieldCheck className="h-5 w-5 sm:h-6 sm:w-6 text-success flex-shrink-0" />
           <div>
-            <p className="font-semibold text-success">Payroll Finalized & Locked</p>
-            <p className="text-sm text-muted-foreground">
-              {months[selectedMonth - 1]} {selectedYear} payroll is locked. No further edits are allowed.
+            <p className="font-semibold text-success text-sm sm:text-base">Payroll Finalized & Locked</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              {months[selectedMonth - 1]} {selectedYear} payroll is locked.
             </p>
           </div>
         </div>
@@ -572,20 +578,20 @@ export default function PayrollRun() {
 
       {/* Period Selection */}
       <Card>
-        <CardHeader>
-          <CardTitle>Payroll Period</CardTitle>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Payroll Period</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="space-y-2">
-              <Label>Month</Label>
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="space-y-2 flex-1 sm:flex-none">
+              <Label className="text-xs sm:text-sm">Month</Label>
               <Select value={String(selectedMonth)} onValueChange={(v) => {
                 setSelectedMonth(Number(v));
                 setIsGenerated(false);
                 setPayrollGrid([]);
                 setIsMonthLocked(false);
               }}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -597,15 +603,15 @@ export default function PayrollRun() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Year</Label>
+            <div className="space-y-2 flex-1 sm:flex-none">
+              <Label className="text-xs sm:text-sm">Year</Label>
               <Select value={String(selectedYear)} onValueChange={(v) => {
                 setSelectedYear(Number(v));
                 setIsGenerated(false);
                 setPayrollGrid([]);
                 setIsMonthLocked(false);
               }}>
-                <SelectTrigger className="w-[120px]">
+                <SelectTrigger className="w-full sm:w-[120px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -623,11 +629,11 @@ export default function PayrollRun() {
 
       {/* Formula Reference */}
       <Card className="bg-muted/30">
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-2 text-sm">
+        <CardContent className="p-3 sm:pt-6 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs sm:text-sm">
             <span className="font-medium">Formula:</span>
-            <code className="bg-background px-2 py-1 rounded text-xs">
-              Net Payable = Gross + Prev Month Adj + One-Time Bonus - PF - ESI - Manual TDS
+            <code className="bg-background px-2 py-1 rounded text-[10px] sm:text-xs overflow-x-auto">
+              Net = Gross + Adj + Bonus - PF - ESI - TDS
             </code>
           </div>
         </CardContent>
@@ -635,49 +641,49 @@ export default function PayrollRun() {
 
       {/* Summary Stats */}
       {isGenerated && payrollGrid.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-4">
           <Card>
-            <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground">Gross Total</p>
-              <p className="text-lg font-bold">{formatCurrency(totals.gross)}</p>
+            <CardContent className="p-2 sm:pt-4 sm:pb-4 sm:p-4">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">Gross</p>
+              <p className="text-sm sm:text-lg font-bold truncate">{formatCurrency(totals.gross)}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground">PF Total</p>
-              <p className="text-lg font-bold text-destructive">-{formatCurrency(totals.pfAmount)}</p>
+            <CardContent className="p-2 sm:pt-4 sm:pb-4 sm:p-4">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">PF</p>
+              <p className="text-sm sm:text-lg font-bold text-destructive truncate">-{formatCurrency(totals.pfAmount)}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground">ESI Total</p>
-              <p className="text-lg font-bold text-destructive">-{formatCurrency(totals.esiAmount)}</p>
+            <CardContent className="p-2 sm:pt-4 sm:pb-4 sm:p-4">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">ESI</p>
+              <p className="text-sm sm:text-lg font-bold text-destructive truncate">-{formatCurrency(totals.esiAmount)}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground">TDS Total</p>
-              <p className="text-lg font-bold text-destructive">-{formatCurrency(totals.manualTDS)}</p>
+            <CardContent className="p-2 sm:pt-4 sm:pb-4 sm:p-4">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">TDS</p>
+              <p className="text-sm sm:text-lg font-bold text-destructive truncate">-{formatCurrency(totals.manualTDS)}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground">Prev. Adj Total</p>
-              <p className={cn("text-lg font-bold", totals.prevMonthAdjustment >= 0 ? "text-success" : "text-destructive")}>
+            <CardContent className="p-2 sm:pt-4 sm:pb-4 sm:p-4">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">Adj</p>
+              <p className={cn("text-sm sm:text-lg font-bold truncate", totals.prevMonthAdjustment >= 0 ? "text-success" : "text-destructive")}>
                 {totals.prevMonthAdjustment >= 0 ? '+' : ''}{formatCurrency(totals.prevMonthAdjustment)}
               </p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-muted-foreground">Bonus Total</p>
-              <p className="text-lg font-bold text-success">+{formatCurrency(totals.oneTimeBonus)}</p>
+            <CardContent className="p-2 sm:pt-4 sm:pb-4 sm:p-4">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">Bonus</p>
+              <p className="text-sm sm:text-lg font-bold text-success truncate">+{formatCurrency(totals.oneTimeBonus)}</p>
             </CardContent>
           </Card>
-          <Card className="bg-primary text-primary-foreground">
-            <CardContent className="pt-4 pb-4">
-              <p className="text-xs text-primary-foreground/80">Net Payable</p>
-              <p className="text-lg font-bold">{formatCurrency(totals.netPayable)}</p>
+          <Card className="bg-primary text-primary-foreground col-span-2 sm:col-span-1">
+            <CardContent className="p-2 sm:pt-4 sm:pb-4 sm:p-4">
+              <p className="text-[10px] sm:text-xs text-primary-foreground/80">Net Payable</p>
+              <p className="text-sm sm:text-lg font-bold">{formatCurrency(totals.netPayable)}</p>
             </CardContent>
           </Card>
         </div>
@@ -685,175 +691,297 @@ export default function PayrollRun() {
 
       {/* Payroll Grid */}
       <Card>
-        <CardHeader>
-          <CardTitle>Payroll Grid</CardTitle>
-          <CardDescription>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Payroll Grid</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             {isGenerated 
               ? `${months[selectedMonth - 1]} ${selectedYear} • ${payrollGrid.length} employees`
               : 'Click "Generate Payroll" to load data'
             }
             {isMonthLocked && (
-              <Badge className="ml-2 bg-success" variant="secondary">
+              <Badge className="ml-2 bg-success text-[10px] sm:text-xs" variant="secondary">
                 <Lock className="h-3 w-3 mr-1" />
                 Locked
               </Badge>
             )}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6 pt-0">
           {!isGenerated ? (
-            <div className="text-center py-12">
-              <Calculator className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-              <p className="text-muted-foreground mb-4">
-                Select a period and generate payroll to view data
+            <div className="text-center py-8 sm:py-12">
+              <Calculator className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground/30 mx-auto mb-4" />
+              <p className="text-muted-foreground text-sm mb-4">
+                Select a period and generate payroll
               </p>
-              <Button onClick={handleGeneratePayroll} className="gap-2">
+              <Button onClick={handleGeneratePayroll} className="gap-2" size="sm">
                 <Play className="h-4 w-4" />
                 Generate Payroll
               </Button>
             </div>
           ) : payrollGrid.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-8 sm:py-12 text-muted-foreground text-sm">
               No active employees found
             </div>
           ) : (
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="sticky left-0 bg-muted/50">Name</TableHead>
-                    <TableHead className="text-center w-[90px]">Present Days</TableHead>
-                    <TableHead className="text-right w-[120px]">Gross Salary</TableHead>
-                    <TableHead className="text-right w-[100px]">PF Deduction</TableHead>
-                    <TableHead className="text-right w-[100px]">ESI Deduction</TableHead>
-                    <TableHead className="text-center w-[120px]">Manual TDS (₹)</TableHead>
-                    <TableHead className="text-center w-[130px]">Prev. Month Adj (₹)</TableHead>
-                    <TableHead className="text-center w-[130px]">One-Time Bonus (₹)</TableHead>
-                    <TableHead className="text-right w-[120px]">Net Payable</TableHead>
-                    <TableHead className="text-center w-[80px]">Payslip</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payrollGrid.map((row) => (
-                    <TableRow 
-                      key={row.id}
-                      className={cn(
-                        row.tdsWarning && 'bg-warning/5',
-                        isMonthLocked && 'opacity-75'
-                      )}
-                    >
-                      <TableCell className="sticky left-0 bg-card">
-                        <div className="flex items-center gap-2">
-                          <div>
-                            <p className="font-medium">{row.employeeName}</p>
-                            <p className="text-xs text-muted-foreground">{row.employeeCode}</p>
+            <>
+              {/* Desktop Table */}
+              <div className="hidden lg:block rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="sticky left-0 bg-muted/50">Name</TableHead>
+                      <TableHead className="text-center w-[90px]">Days</TableHead>
+                      <TableHead className="text-right w-[120px]">Gross</TableHead>
+                      <TableHead className="text-right w-[100px]">PF</TableHead>
+                      <TableHead className="text-right w-[100px]">ESI</TableHead>
+                      <TableHead className="text-center w-[120px]">TDS (₹)</TableHead>
+                      <TableHead className="text-center w-[130px]">Adj (₹)</TableHead>
+                      <TableHead className="text-center w-[130px]">Bonus (₹)</TableHead>
+                      <TableHead className="text-right w-[120px]">Net</TableHead>
+                      <TableHead className="text-center w-[80px]">PDF</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payrollGrid.map((row) => (
+                      <TableRow 
+                        key={row.id}
+                        className={cn(
+                          row.tdsWarning && 'bg-warning/5',
+                          isMonthLocked && 'opacity-75'
+                        )}
+                      >
+                        <TableCell className="sticky left-0 bg-card">
+                          <div className="flex items-center gap-2">
+                            <div>
+                              <p className="font-medium text-sm">{row.employeeName}</p>
+                              <p className="text-xs text-muted-foreground">{row.employeeCode}</p>
+                            </div>
+                            {row.tdsWarning && (
+                              <span title="TDS Warning: Gross > ₹50,000">
+                                <AlertTriangle className="h-4 w-4 text-warning" />
+                              </span>
+                            )}
                           </div>
-                          {row.tdsWarning && (
-                            <span title="TDS Warning: Gross > ₹50,000">
-                              <AlertTriangle className="h-4 w-4 text-warning" />
-                            </span>
-                          )}
+                        </TableCell>
+                        <TableCell className="text-center text-sm">
+                          {row.presentDays}/{row.totalDays}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {formatCurrency(row.gross)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                          -{formatCurrency(row.pfAmount)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                          -{formatCurrency(row.esiAmount)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={row.manualTDS}
+                            onChange={(e) => handleManualTDSChange(row.id, Number(e.target.value) || 0)}
+                            disabled={isMonthLocked || row.isLocked}
+                            className="w-24 text-center mx-auto text-sm"
+                            placeholder="0"
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Input
+                            type="number"
+                            value={row.prevMonthAdjustment}
+                            onChange={(e) => handlePrevMonthAdjustmentChange(row.id, Number(e.target.value) || 0)}
+                            disabled={isMonthLocked || row.isLocked}
+                            className="w-28 text-center mx-auto text-sm"
+                            placeholder="0"
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={row.oneTimeBonus}
+                            onChange={(e) => handleOneTimeBonusChange(row.id, Number(e.target.value) || 0)}
+                            disabled={isMonthLocked || row.isLocked}
+                            className="w-28 text-center mx-auto text-sm"
+                            placeholder="0"
+                          />
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-sm">
+                          <span className={cn(
+                            row.netPayable < 0 && 'text-destructive'
+                          )}>
+                            {formatCurrency(row.netPayable)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleGeneratePayslip(row)}
+                            className="gap-1"
+                          >
+                            <FileDown className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {/* Totals Row */}
+                    <TableRow className="bg-muted/50 font-semibold">
+                      <TableCell className="sticky left-0 bg-muted/50">
+                        <span className="font-bold text-sm">TOTALS</span>
+                      </TableCell>
+                      <TableCell className="text-center text-sm">-</TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatCurrency(totals.gross)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-destructive text-sm">
+                        -{formatCurrency(totals.pfAmount)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-destructive text-sm">
+                        -{formatCurrency(totals.esiAmount)}
+                      </TableCell>
+                      <TableCell className="text-center font-mono text-destructive text-sm">
+                        -{formatCurrency(totals.manualTDS)}
+                      </TableCell>
+                      <TableCell className={cn(
+                        "text-center font-mono text-sm",
+                        totals.prevMonthAdjustment >= 0 ? "text-success" : "text-destructive"
+                      )}>
+                        {totals.prevMonthAdjustment >= 0 ? '+' : ''}{formatCurrency(totals.prevMonthAdjustment)}
+                      </TableCell>
+                      <TableCell className="text-center font-mono text-success text-sm">
+                        +{formatCurrency(totals.oneTimeBonus)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-base">
+                        {formatCurrency(totals.netPayable)}
+                      </TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile/Tablet Cards */}
+              <div className="lg:hidden space-y-3">
+                {payrollGrid.map((row) => (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      "p-3 rounded-lg border bg-card",
+                      row.tdsWarning && 'border-warning/50 bg-warning/5',
+                      isMonthLocked && 'opacity-75'
+                    )}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <p className="font-medium text-sm">{row.employeeName}</p>
+                          <p className="text-xs text-muted-foreground">{row.employeeCode}</p>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {row.presentDays}/{row.totalDays}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatCurrency(row.gross)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        -{formatCurrency(row.pfAmount)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        -{formatCurrency(row.esiAmount)}
-                      </TableCell>
-                      <TableCell className="text-center">
+                        {row.tdsWarning && (
+                          <AlertTriangle className="h-4 w-4 text-warning" />
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-sm">{formatCurrency(row.netPayable)}</p>
+                        <p className="text-[10px] text-muted-foreground">Net Pay</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs mb-3">
+                      <div className="p-2 rounded bg-muted/50">
+                        <p className="font-medium">{row.presentDays}/{row.totalDays}</p>
+                        <p className="text-[10px] text-muted-foreground">Days</p>
+                      </div>
+                      <div className="p-2 rounded bg-muted/50">
+                        <p className="font-medium">{formatCurrency(row.gross)}</p>
+                        <p className="text-[10px] text-muted-foreground">Gross</p>
+                      </div>
+                      <div className="p-2 rounded bg-destructive/10">
+                        <p className="font-medium text-destructive">{formatCurrency(row.totalDeductions)}</p>
+                        <p className="text-[10px] text-muted-foreground">Deductions</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">TDS</Label>
                         <Input
                           type="number"
                           min={0}
                           value={row.manualTDS}
                           onChange={(e) => handleManualTDSChange(row.id, Number(e.target.value) || 0)}
                           disabled={isMonthLocked || row.isLocked}
-                          className="w-24 text-center mx-auto"
+                          className="h-8 text-xs text-center"
                           placeholder="0"
                         />
-                      </TableCell>
-                      <TableCell className="text-center">
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">Adj</Label>
                         <Input
                           type="number"
                           value={row.prevMonthAdjustment}
                           onChange={(e) => handlePrevMonthAdjustmentChange(row.id, Number(e.target.value) || 0)}
                           disabled={isMonthLocked || row.isLocked}
-                          className="w-28 text-center mx-auto"
+                          className="h-8 text-xs text-center"
                           placeholder="0"
                         />
-                      </TableCell>
-                      <TableCell className="text-center">
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">Bonus</Label>
                         <Input
                           type="number"
                           min={0}
                           value={row.oneTimeBonus}
                           onChange={(e) => handleOneTimeBonusChange(row.id, Number(e.target.value) || 0)}
                           disabled={isMonthLocked || row.isLocked}
-                          className="w-28 text-center mx-auto"
+                          className="h-8 text-xs text-center"
                           placeholder="0"
                         />
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-semibold">
-                        <span className={cn(
-                          row.netPayable < 0 && 'text-destructive'
-                        )}>
-                          {formatCurrency(row.netPayable)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleGeneratePayslip(row)}
-                          className="gap-1"
-                        >
-                          <FileDown className="h-4 w-4" />
-                          PDF
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {/* Totals Row */}
-                  <TableRow className="bg-muted/50 font-semibold">
-                    <TableCell className="sticky left-0 bg-muted/50">
-                      <span className="font-bold">TOTALS</span>
-                    </TableCell>
-                    <TableCell className="text-center">-</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {formatCurrency(totals.gross)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-destructive">
-                      -{formatCurrency(totals.pfAmount)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-destructive">
-                      -{formatCurrency(totals.esiAmount)}
-                    </TableCell>
-                    <TableCell className="text-center font-mono text-destructive">
-                      -{formatCurrency(totals.manualTDS)}
-                    </TableCell>
-                    <TableCell className={cn(
-                      "text-center font-mono",
-                      totals.prevMonthAdjustment >= 0 ? "text-success" : "text-destructive"
-                    )}>
-                      {totals.prevMonthAdjustment >= 0 ? '+' : ''}{formatCurrency(totals.prevMonthAdjustment)}
-                    </TableCell>
-                    <TableCell className="text-center font-mono text-success">
-                      +{formatCurrency(totals.oneTimeBonus)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-lg">
-                      {formatCurrency(totals.netPayable)}
-                    </TableCell>
-                    <TableCell></TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleGeneratePayslip(row)}
+                      className="w-full gap-2 text-xs"
+                    >
+                      <FileDown className="h-3 w-3" />
+                      Download Payslip
+                    </Button>
+                  </div>
+                ))}
+
+                {/* Mobile Totals Card */}
+                <div className="p-3 rounded-lg border-2 border-primary bg-primary/5">
+                  <p className="font-bold text-sm mb-2">TOTALS</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Gross:</span>
+                      <span className="font-medium">{formatCurrency(totals.gross)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">PF:</span>
+                      <span className="font-medium text-destructive">-{formatCurrency(totals.pfAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">ESI:</span>
+                      <span className="font-medium text-destructive">-{formatCurrency(totals.esiAmount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">TDS:</span>
+                      <span className="font-medium text-destructive">-{formatCurrency(totals.manualTDS)}</span>
+                    </div>
+                    <div className="col-span-2 pt-2 border-t flex justify-between">
+                      <span className="font-bold">Net Payable:</span>
+                      <span className="font-bold text-primary">{formatCurrency(totals.netPayable)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -861,34 +989,34 @@ export default function PayrollRun() {
       {/* Calculation Details Card */}
       {isGenerated && payrollGrid.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Payslip Contents</CardTitle>
-            <CardDescription>Each PDF payslip includes the following</CardDescription>
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-sm sm:text-base">Payslip Contents</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Each PDF payslip includes the following</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-              <div className="p-3 rounded-lg bg-muted/50">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
+              <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
                 <strong>Header:</strong>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Company Name, Employee Name, Employee ID, Department
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                  Company, Employee, ID, Dept
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-muted/50">
+              <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
                 <strong>Earnings:</strong>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Basic (50%), HRA (20%), Other Allowances, Arrears
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                  Basic, HRA, Allowances, Arrears
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-muted/50">
+              <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
                 <strong>Deductions:</strong>
-                <p className="text-xs text-muted-foreground mt-1">
-                  PF, ESI, TDS / Manual TDS
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                  PF, ESI, TDS
                 </p>
               </div>
-              <div className="p-3 rounded-lg bg-muted/50">
+              <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
                 <strong>Summary:</strong>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Total Earnings, Total Deductions, Net Payable
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                  Total Earn, Deduct, Net
                 </p>
               </div>
             </div>
@@ -898,49 +1026,30 @@ export default function PayrollRun() {
 
       {/* Lock Confirmation Dialog */}
       <Dialog open={showLockConfirmDialog} onOpenChange={setShowLockConfirmDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Lock className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Lock className="h-4 w-4 sm:h-5 sm:w-5" />
               Finalize & Lock Payroll
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs sm:text-sm">
               You are about to lock the payroll for <strong>{months[selectedMonth - 1]} {selectedYear}</strong>.
+              This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="p-4 rounded-lg bg-warning/10 border border-warning/20">
-              <p className="text-sm text-warning font-medium mb-2">⚠️ This action cannot be undone</p>
-              <p className="text-sm text-muted-foreground">
-                Once locked, no further changes can be made to:
-              </p>
-              <ul className="text-sm text-muted-foreground mt-2 list-disc list-inside">
-                <li>Manual TDS amounts</li>
-                <li>Arrears/Adjustments</li>
-                <li>Any salary calculations</li>
-              </ul>
+          <div className="space-y-4 pt-4">
+            <div className="p-3 sm:p-4 rounded-lg bg-warning/10 text-warning text-xs sm:text-sm">
+              <strong>Warning:</strong> Once locked, you cannot modify any payroll data for this month.
             </div>
-
-            <div className="p-4 rounded-lg bg-muted/50">
-              <p className="text-sm font-medium mb-2">Summary</p>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <span className="text-muted-foreground">Employees:</span>
-                <span className="font-mono">{payrollGrid.length}</span>
-                <span className="text-muted-foreground">Total Net Payable:</span>
-                <span className="font-mono font-semibold">{formatCurrency(totals.netPayable)}</span>
-              </div>
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+              <Button variant="outline" onClick={() => setShowLockConfirmDialog(false)} className="sm:order-1">
+                Cancel
+              </Button>
+              <Button onClick={handleLockPayroll} className="gap-2 sm:order-2">
+                <Lock className="h-4 w-4" />
+                Confirm & Lock
+              </Button>
             </div>
-          </div>
-
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setShowLockConfirmDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleLockPayroll} className="gap-2">
-              <Lock className="h-4 w-4" />
-              Confirm & Lock
-            </Button>
           </div>
         </DialogContent>
       </Dialog>

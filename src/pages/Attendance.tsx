@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useEmployees, useAttendance, MockEmployee, MockAttendance } from '@/hooks/use-mock-data';
 import {
   Table,
@@ -9,7 +9,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -23,13 +22,12 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Calendar,
   Clock,
-  Users,
   Loader2,
   CheckCircle2,
   XCircle,
   Coffee,
 } from 'lucide-react';
-import { format, parseISO, isToday, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { format, parseISO, eachDayOfInterval, startOfMonth, endOfMonth } from 'date-fns';
 
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -92,20 +90,14 @@ export default function Attendance() {
   const totalAbsent = attendanceSummary.reduce((sum, s) => sum + s.absentDays, 0);
   const totalHours = attendanceSummary.reduce((sum, s) => sum + s.totalHours, 0);
 
-  // Get days in month for daily view
-  const daysInMonth = eachDayOfInterval({
-    start: startOfMonth(new Date(selectedYear, selectedMonth - 1)),
-    end: endOfMonth(new Date(selectedYear, selectedMonth - 1)),
-  });
-
   const years = Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'present':
-        return <Badge className="bg-green-100 text-green-800">Present</Badge>;
+        return <Badge className="bg-success/20 text-success border-success/30">Present</Badge>;
       case 'late':
-        return <Badge className="bg-yellow-100 text-yellow-800">Late</Badge>;
+        return <Badge className="bg-warning/20 text-warning border-warning/30">Late</Badge>;
       case 'absent':
         return <Badge variant="destructive">Absent</Badge>;
       case 'on-leave':
@@ -129,22 +121,26 @@ export default function Attendance() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Attendance</h1>
-          <p className="text-muted-foreground">View attendance records from database</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Attendance</h1>
+          <p className="text-sm text-muted-foreground">View attendance records from database</p>
         </div>
         <div className="flex gap-2">
           <Button
             variant={viewMode === 'summary' ? 'default' : 'outline'}
             onClick={() => setViewMode('summary')}
+            size="sm"
+            className="flex-1 sm:flex-none"
           >
             Summary
           </Button>
           <Button
             variant={viewMode === 'daily' ? 'default' : 'outline'}
             onClick={() => setViewMode('daily')}
+            size="sm"
+            className="flex-1 sm:flex-none"
           >
             Daily Log
           </Button>
@@ -153,12 +149,12 @@ export default function Attendance() {
 
       {/* Month/Year Selection */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="space-y-2">
-              <Label>Month</Label>
+        <CardContent className="pt-4 sm:pt-6">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="space-y-2 flex-1 sm:flex-none">
+              <Label className="text-xs sm:text-sm">Month</Label>
               <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -170,10 +166,10 @@ export default function Attendance() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Year</Label>
+            <div className="space-y-2 flex-1 sm:flex-none">
+              <Label className="text-xs sm:text-sm">Year</Label>
               <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-                <SelectTrigger className="w-[120px]">
+                <SelectTrigger className="w-full sm:w-[120px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -190,55 +186,55 @@ export default function Attendance() {
       </Card>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-green-100">
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
+          <CardContent className="p-3 sm:pt-6 sm:p-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="p-2 sm:p-3 rounded-full bg-success/10">
+                <CheckCircle2 className="h-4 w-4 sm:h-6 sm:w-6 text-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{totalPresent}</p>
-                <p className="text-sm text-muted-foreground">Present Days</p>
+                <p className="text-lg sm:text-2xl font-bold">{totalPresent}</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">Present Days</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-yellow-100">
-                <Clock className="h-6 w-6 text-yellow-600" />
+          <CardContent className="p-3 sm:pt-6 sm:p-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="p-2 sm:p-3 rounded-full bg-warning/10">
+                <Clock className="h-4 w-4 sm:h-6 sm:w-6 text-warning" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{totalLate}</p>
-                <p className="text-sm text-muted-foreground">Late Days</p>
+                <p className="text-lg sm:text-2xl font-bold">{totalLate}</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">Late Days</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-red-100">
-                <XCircle className="h-6 w-6 text-red-600" />
+          <CardContent className="p-3 sm:pt-6 sm:p-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="p-2 sm:p-3 rounded-full bg-destructive/10">
+                <XCircle className="h-4 w-4 sm:h-6 sm:w-6 text-destructive" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{totalAbsent}</p>
-                <p className="text-sm text-muted-foreground">Absent Days</p>
+                <p className="text-lg sm:text-2xl font-bold">{totalAbsent}</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">Absent Days</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-full bg-blue-100">
-                <Coffee className="h-6 w-6 text-blue-600" />
+          <CardContent className="p-3 sm:pt-6 sm:p-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="p-2 sm:p-3 rounded-full bg-primary/10">
+                <Coffee className="h-4 w-4 sm:h-6 sm:w-6 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{totalHours.toFixed(1)}</p>
-                <p className="text-sm text-muted-foreground">Total Hours</p>
+                <p className="text-lg sm:text-2xl font-bold">{totalHours.toFixed(1)}</p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground">Total Hours</p>
               </div>
             </div>
           </CardContent>
@@ -248,14 +244,15 @@ export default function Attendance() {
       {viewMode === 'summary' ? (
         /* Summary View - Per Employee */
         <Card>
-          <CardHeader>
-            <CardTitle>Monthly Summary</CardTitle>
-            <CardDescription>
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">Monthly Summary</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
               {months[selectedMonth - 1]} {selectedYear} • {attendanceSummary.length} employees
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            {/* Desktop Table */}
+            <div className="hidden md:block rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -293,17 +290,17 @@ export default function Attendance() {
                         </TableCell>
                         <TableCell>{summary.department}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="bg-green-50">
+                          <Badge variant="outline" className="bg-success/10">
                             {summary.presentDays}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="bg-yellow-50">
+                          <Badge variant="outline" className="bg-warning/10">
                             {summary.lateDays}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="bg-red-50">
+                          <Badge variant="outline" className="bg-destructive/10">
                             {summary.absentDays}
                           </Badge>
                         </TableCell>
@@ -321,19 +318,67 @@ export default function Attendance() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-3">
+              {attendanceSummary.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground text-sm">
+                  No attendance records found for this period
+                </p>
+              ) : (
+                attendanceSummary.map((summary) => (
+                  <div
+                    key={summary.employeeId}
+                    className="p-3 rounded-lg border bg-card"
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-medium text-primary">
+                          {summary.employeeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{summary.employeeName}</p>
+                        <p className="text-xs text-muted-foreground">{summary.department}</p>
+                      </div>
+                      <p className="text-sm font-medium text-primary">{summary.totalHours.toFixed(1)} hrs</p>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      <div className="p-2 rounded bg-success/10">
+                        <p className="text-sm font-bold text-success">{summary.presentDays}</p>
+                        <p className="text-[10px] text-muted-foreground">Present</p>
+                      </div>
+                      <div className="p-2 rounded bg-warning/10">
+                        <p className="text-sm font-bold text-warning">{summary.lateDays}</p>
+                        <p className="text-[10px] text-muted-foreground">Late</p>
+                      </div>
+                      <div className="p-2 rounded bg-destructive/10">
+                        <p className="text-sm font-bold text-destructive">{summary.absentDays}</p>
+                        <p className="text-[10px] text-muted-foreground">Absent</p>
+                      </div>
+                      <div className="p-2 rounded bg-muted">
+                        <p className="text-sm font-bold">{summary.leaveDays}</p>
+                        <p className="text-[10px] text-muted-foreground">Leave</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </CardContent>
         </Card>
       ) : (
         /* Daily Log View */
         <Card>
-          <CardHeader>
-            <CardTitle>Daily Attendance Log</CardTitle>
-            <CardDescription>
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">Daily Attendance Log</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
               All clock-in/clock-out records for {months[selectedMonth - 1]} {selectedYear}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            {/* Desktop Table */}
+            <div className="hidden md:block rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -383,6 +428,53 @@ export default function Attendance() {
                   )}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-3">
+              {filteredAttendance.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground text-sm">
+                  No attendance records found for this period
+                </p>
+              ) : (
+                filteredAttendance
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((record) => {
+                    const emp = employees?.find(e => e.id === record.employee_id);
+                    return (
+                      <div
+                        key={record.id}
+                        className="p-3 rounded-lg border bg-card"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="font-medium text-sm">{emp?.full_name || 'Unknown'}</p>
+                            <p className="text-xs text-muted-foreground">{emp?.department || '-'}</p>
+                          </div>
+                          {getStatusBadge(record.status)}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                          <Calendar className="h-3 w-3" />
+                          {format(parseISO(record.date), 'dd MMM yyyy')}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                          <div className="p-2 rounded bg-muted">
+                            <p className="font-medium">{formatTime(record.sign_in)}</p>
+                            <p className="text-muted-foreground">Sign In</p>
+                          </div>
+                          <div className="p-2 rounded bg-muted">
+                            <p className="font-medium">{formatTime(record.sign_out)}</p>
+                            <p className="text-muted-foreground">Sign Out</p>
+                          </div>
+                          <div className="p-2 rounded bg-muted">
+                            <p className="font-medium">{record.total_hours || '-'}</p>
+                            <p className="text-muted-foreground">Hours</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
             </div>
           </CardContent>
         </Card>

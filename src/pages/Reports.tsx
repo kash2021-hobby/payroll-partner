@@ -92,204 +92,211 @@ export default function Reports() {
   }, [employees]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Reports & Calculator</h1>
-        <p className="text-muted-foreground">Analytics, insights, and salary calculation tools</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Reports & Calculator</h1>
+        <p className="text-sm text-muted-foreground">Analytics, insights, and salary calculation tools</p>
       </div>
 
-      <Tabs defaultValue="calculator" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="calculator">Salary Calculator</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+      <Tabs defaultValue="calculator" className="space-y-4 sm:space-y-6">
+        <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-flex">
+          <TabsTrigger value="calculator" className="text-xs sm:text-sm">Salary Calculator</TabsTrigger>
+          <TabsTrigger value="analytics" className="text-xs sm:text-sm">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="calculator">
           <SalaryCalculator />
         </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-6">
-      {/* Monthly Trend Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Monthly Payroll Trend</CardTitle>
-          <CardDescription>Gross vs Net payout comparison over months</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyTrend}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis 
-                  dataKey="month" 
-                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                />
-                <YAxis 
-                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                  tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
-                />
-                <Tooltip 
-                  formatter={(value: number, name: string) => [
-                    formatCurrency(value),
-                    name === 'gross' ? 'Gross' : name === 'payout' ? 'Net Payout' : 'Deductions'
-                  ]}
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '0.5rem',
-                  }}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="gross"
-                  name="Gross"
-                  stroke="hsl(var(--muted-foreground))"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="payout"
-                  name="Net Payout"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={{ fill: 'hsl(var(--primary))' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="deductions"
-                  name="Deductions"
-                  stroke="hsl(var(--destructive))"
-                  strokeWidth={2}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Department Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Salary by Department</CardTitle>
-            <CardDescription>Total monthly salary distribution</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={departmentBreakdown}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {departmentBreakdown.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value: number) => formatCurrency(value)}
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '0.5rem',
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Deduction Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Deduction Breakdown</CardTitle>
-            <CardDescription>PF, ESI, and TDS totals</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {deductionBreakdown.length === 0 ? (
-              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No deduction data available. Generate payroll first.
-              </div>
-            ) : (
-              <div className="h-[300px]">
+        <TabsContent value="analytics" className="space-y-4 sm:space-y-6">
+          {/* Monthly Trend Chart */}
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Monthly Payroll Trend</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Gross vs Net payout comparison over months</CardDescription>
+            </CardHeader>
+            <CardContent className="p-2 sm:p-6 pt-0">
+              <div className="h-[250px] sm:h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={deductionBreakdown}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {deductionBreakdown.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
+                  <LineChart data={monthlyTrend}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="month" 
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                    />
+                    <YAxis 
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                      tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
+                      width={45}
+                    />
                     <Tooltip 
-                      formatter={(value: number) => formatCurrency(value)}
+                      formatter={(value: number, name: string) => [
+                        formatCurrency(value),
+                        name === 'gross' ? 'Gross' : name === 'payout' ? 'Net Payout' : 'Deductions'
+                      ]}
                       contentStyle={{
                         backgroundColor: 'hsl(var(--card))',
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '0.5rem',
+                        fontSize: '12px',
                       }}
                     />
-                  </PieChart>
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <Line
+                      type="monotone"
+                      dataKey="gross"
+                      name="Gross"
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="payout"
+                      name="Net Payout"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(var(--primary))', r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="deductions"
+                      name="Deductions"
+                      stroke="hsl(var(--destructive))"
+                      strokeWidth={2}
+                    />
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
 
-      {/* Salary Distribution */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Salary Distribution</CardTitle>
-          <CardDescription>Employee count by salary range</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={salaryDistribution}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis 
-                  dataKey="range" 
-                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                />
-                <YAxis 
-                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '0.5rem',
-                  }}
-                />
-                <Bar 
-                  dataKey="count" 
-                  name="Employees"
-                  fill="hsl(var(--primary))" 
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            {/* Department Breakdown */}
+            <Card>
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-base sm:text-lg">Salary by Department</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">Total monthly salary distribution</CardDescription>
+              </CardHeader>
+              <CardContent className="p-2 sm:p-6 pt-0">
+                <div className="h-[250px] sm:h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={departmentBreakdown}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                        style={{ fontSize: '10px' }}
+                      >
+                        {departmentBreakdown.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value: number) => formatCurrency(value)}
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '0.5rem',
+                          fontSize: '12px',
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Deduction Breakdown */}
+            <Card>
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-base sm:text-lg">Deduction Breakdown</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">PF, ESI, and TDS totals</CardDescription>
+              </CardHeader>
+              <CardContent className="p-2 sm:p-6 pt-0">
+                {deductionBreakdown.length === 0 ? (
+                  <div className="h-[250px] sm:h-[300px] flex items-center justify-center text-muted-foreground text-sm">
+                    No deduction data available. Generate payroll first.
+                  </div>
+                ) : (
+                  <div className="h-[250px] sm:h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={deductionBreakdown}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          style={{ fontSize: '10px' }}
+                        >
+                          {deductionBreakdown.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value: number) => formatCurrency(value)}
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '0.5rem',
+                            fontSize: '12px',
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Salary Distribution */}
+          <Card>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Salary Distribution</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Employee count by salary range</CardDescription>
+            </CardHeader>
+            <CardContent className="p-2 sm:p-6 pt-0">
+              <div className="h-[250px] sm:h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={salaryDistribution}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="range" 
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                    />
+                    <YAxis 
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '0.5rem',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Bar 
+                      dataKey="count" 
+                      name="Employees"
+                      fill="hsl(var(--primary))" 
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
