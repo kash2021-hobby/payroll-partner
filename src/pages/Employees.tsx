@@ -169,9 +169,9 @@ export default function Employees() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+        return <Badge className="bg-success/20 text-success border-success/30">Active</Badge>;
       case 'on-leave':
-        return <Badge className="bg-yellow-100 text-yellow-800">On Leave</Badge>;
+        return <Badge className="bg-warning/20 text-warning border-warning/30">On Leave</Badge>;
       case 'inactive':
         return <Badge variant="secondary">Inactive</Badge>;
       default:
@@ -400,8 +400,8 @@ export default function Employees() {
         </CardContent>
       </Card>
 
-      {/* Employee Table */}
-      <Card>
+      {/* Employee Table - Desktop */}
+      <Card className="hidden md:block">
         <CardHeader>
           <CardTitle>All Employees</CardTitle>
           <CardDescription>
@@ -414,7 +414,7 @@ export default function Employees() {
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -422,8 +422,8 @@ export default function Employees() {
                     <TableHead>Full Name</TableHead>
                     <TableHead>Salary Type</TableHead>
                     <TableHead>Base Amount</TableHead>
-                    <TableHead>Days Rule</TableHead>
-                    <TableHead>Compliance</TableHead>
+                    <TableHead className="hidden lg:table-cell">Days Rule</TableHead>
+                    <TableHead className="hidden lg:table-cell">Compliance</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -450,10 +450,10 @@ export default function Employees() {
                           </Badge>
                         </TableCell>
                         <TableCell>{formatCurrency(employee.work_rate)}</TableCell>
-                        <TableCell className="text-sm">
+                        <TableCell className="text-sm hidden lg:table-cell">
                           {employee.month_calculation_type === 'fixed_26' ? 'Fixed 26' : 'Calendar'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           <div className="flex gap-1">
                             {employee.is_pf_enabled ? (
                               <Badge variant="secondary" className="text-xs">PF</Badge>
@@ -498,6 +498,79 @@ export default function Employees() {
           )}
         </CardContent>
       </Card>
+
+      {/* Employee Cards - Mobile */}
+      <div className="md:hidden space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">All Employees</h2>
+          <span className="text-sm text-muted-foreground">
+            {isLoading ? 'Loading...' : `${filteredEmployees.length} employees`}
+          </span>
+        </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : filteredEmployees.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              No employees found
+            </CardContent>
+          </Card>
+        ) : (
+          filteredEmployees.map((employee) => (
+            <Card key={employee.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold truncate">{employee.full_name}</h3>
+                      {getStatusBadge(employee.status)}
+                    </div>
+                    <p className="text-xs text-muted-foreground font-mono mb-2">
+                      ID: {employee.id.slice(0, 8).toUpperCase()}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Type:</span>{' '}
+                        <span className="capitalize">{employee.employment_type}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Rate:</span>{' '}
+                        {formatCurrency(employee.work_rate)}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 mt-2">
+                      {employee.is_pf_enabled && <Badge variant="secondary" className="text-xs">PF</Badge>}
+                      {employee.is_esi_enabled && <Badge variant="secondary" className="text-xs">ESI</Badge>}
+                      {employee.is_tds_enabled && <Badge variant="secondary" className="text-xs">TDS</Badge>}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleOpenDialog(employee)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleDelete(employee)}
+                      disabled={deleteEmployee.isPending}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   );
 }
